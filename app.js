@@ -41,22 +41,26 @@ const state = {
 // --- Supabase Cloud Client Setup ---
 const supabaseUrl = localStorage.getItem('supabase_url') || '';
 const supabaseKey = localStorage.getItem('supabase_key') || '';
-let supabase = null;
+let supabaseClient = null;
+let isLocalWriting = false;
+let localWriteTimeout = null;
 
 if (supabaseUrl && supabaseKey) {
   try {
-    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
   } catch (err) {
     console.error("Supabase initialization error:", err);
   }
 }
 
 async function syncAllToCloud() {
-  if (!supabase) return;
+  if (!supabaseClient) return;
+  isLocalWriting = true;
+  if (localWriteTimeout) clearTimeout(localWriteTimeout);
   try {
     // 1. Sync Materials
-    for (const m of state.materialsCatalog) {
-      await supabase.from('raw_materials').upsert({
+    if (state.materialsCatalog.length > 0) {
+      const records = state.materialsCatalog.map(m => ({
         id: m.id,
         name: m.name,
         category: m.category || '',
@@ -66,18 +70,17 @@ async function syncAllToCloud() {
         min_stock: m.minStock || 0,
         item_code: m.itemCode || '',
         invoice_number: m.invoiceNumber || ''
-      });
-    }
-    if (state.materialsCatalog.length > 0) {
+      }));
+      await supabaseClient.from('raw_materials').upsert(records);
       const ids = state.materialsCatalog.map(x => x.id);
-      await supabase.from('raw_materials').delete().not('id', 'in', `(${ids.join(',')})`);
+      await supabaseClient.from('raw_materials').delete().not('id', 'in', `(${ids.join(',')})`);
     } else {
-      await supabase.from('raw_materials').delete().neq('id', '');
+      await supabaseClient.from('raw_materials').delete().neq('id', '');
     }
 
     // 2. Sync Blueprints
-    for (const t of state.templatesCatalog) {
-      await supabase.from('blueprints').upsert({
+    if (state.templatesCatalog.length > 0) {
+      const records = state.templatesCatalog.map(t => ({
         id: t.id,
         name: t.name,
         description: t.description || '',
@@ -86,18 +89,17 @@ async function syncAllToCloud() {
         mfg_time_unit: t.mfgTimeUnit || 'sec',
         materials: t.materials || [],
         operations: t.operations || []
-      });
-    }
-    if (state.templatesCatalog.length > 0) {
+      }));
+      await supabaseClient.from('blueprints').upsert(records);
       const ids = state.templatesCatalog.map(x => x.id);
-      await supabase.from('blueprints').delete().not('id', 'in', `(${ids.join(',')})`);
+      await supabaseClient.from('blueprints').delete().not('id', 'in', `(${ids.join(',')})`);
     } else {
-      await supabase.from('blueprints').delete().neq('id', '');
+      await supabaseClient.from('blueprints').delete().neq('id', '');
     }
 
     // 3. Sync Estimates
-    for (const e of state.savedEstimates) {
-      await supabase.from('estimates').upsert({
+    if (state.savedEstimates.length > 0) {
+      const records = state.savedEstimates.map(e => ({
         id: e.id,
         title: e.title,
         client_name: e.clientName || '',
@@ -112,18 +114,17 @@ async function syncAllToCloud() {
         totals: e.totals || {},
         date: e.date,
         time: e.time
-      });
-    }
-    if (state.savedEstimates.length > 0) {
+      }));
+      await supabaseClient.from('estimates').upsert(records);
       const ids = state.savedEstimates.map(x => x.id);
-      await supabase.from('estimates').delete().not('id', 'in', `(${ids.join(',')})`);
+      await supabaseClient.from('estimates').delete().not('id', 'in', `(${ids.join(',')})`);
     } else {
-      await supabase.from('estimates').delete().neq('id', '');
+      await supabaseClient.from('estimates').delete().neq('id', '');
     }
 
     // 4. Sync Dispatches
-    for (const d of state.dispatches) {
-      await supabase.from('dispatches').upsert({
+    if (state.dispatches.length > 0) {
+      const records = state.dispatches.map(d => ({
         id: d.id,
         client_name: d.clientName || '',
         estimate_title: d.estimateTitle || '',
@@ -135,27 +136,38 @@ async function syncAllToCloud() {
         date: d.date,
         time: d.time,
         items: d.items || []
-      });
-    }
-    if (state.dispatches.length > 0) {
+      }));
+      await supabaseClient.from('dispatches').upsert(records);
       const ids = state.dispatches.map(x => x.id);
-      await supabase.from('dispatches').delete().not('id', 'in', `(${ids.join(',')})`);
+      await supabaseClient.from('dispatches').delete().not('id', 'in', `(${ids.join(',')})`);
     } else {
-      await supabase.from('dispatches').delete().neq('id', '');
+      await supabaseClient.from('dispatches').delete().neq('id', '');
     }
   } catch (err) {
     console.error("Failed to sync to cloud:", err);
+  } finally {
+    localWriteTimeout = setTimeout(() => {
+      isLocalWriting = false;
+    }, 1500);
   }
 }
 
+let loadCloudTimeout = null;
+function debouncedLoadStateFromCloud() {
+  if (loadCloudTimeout) clearTimeout(loadCloudTimeout);
+  loadCloudTimeout = setTimeout(() => {
+    loadStateFromCloud();
+  }, 300);
+}
+
 async function loadStateFromCloud() {
-  if (!supabase) return;
+  if (!supabaseClient) return;
   try {
     const [matsRes, tplsRes, estsRes, dispsRes] = await Promise.all([
-      supabase.from('raw_materials').select('*'),
-      supabase.from('blueprints').select('*'),
-      supabase.from('estimates').select('*'),
-      supabase.from('dispatches').select('*')
+      supabaseClient.from('raw_materials').select('*'),
+      supabaseClient.from('blueprints').select('*'),
+      supabaseClient.from('estimates').select('*'),
+      supabaseClient.from('dispatches').select('*')
     ]);
 
     if (matsRes.error) throw matsRes.error;
@@ -242,11 +254,12 @@ async function loadStateFromCloud() {
 }
 
 function setupRealtimeSync() {
-  if (!supabase) return;
+  if (!supabaseClient) return;
   try {
-    supabase.channel('public-db-changes')
+    supabaseClient.channel('public-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        loadStateFromCloud();
+        if (isLocalWriting) return;
+        debouncedLoadStateFromCloud();
       })
       .subscribe();
   } catch (err) {
@@ -270,7 +283,7 @@ function loadStateFromStorage() {
   state.savedEstimates = JSON.parse(localStorage.getItem('ws_estimates')) || [];
   state.dispatches = JSON.parse(localStorage.getItem('ws_dispatches')) || [];
 
-  if (supabase) {
+  if (supabaseClient) {
     loadStateFromCloud();
     setupRealtimeSync();
   }
@@ -282,7 +295,7 @@ function saveStateToStorage() {
   localStorage.setItem('ws_templates', JSON.stringify(state.templatesCatalog));
   localStorage.setItem('ws_estimates', JSON.stringify(state.savedEstimates));
   localStorage.setItem('ws_dispatches', JSON.stringify(state.dispatches));
-  if (supabase) {
+  if (supabaseClient) {
     syncAllToCloud();
   }
 }
@@ -3747,7 +3760,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear Supabase settings (disconnect)
         localStorage.removeItem('supabase_url');
         localStorage.removeItem('supabase_key');
-        supabase = null;
+        supabaseClient = null;
         if (dbStatusEl) {
           dbStatusEl.style.background = 'rgba(239, 68, 68, 0.1)';
           dbStatusEl.style.color = '#ef4444';
@@ -3769,7 +3782,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Connection successful! Save credentials
         localStorage.setItem('supabase_url', url);
         localStorage.setItem('supabase_key', key);
-        supabase = client;
+        supabaseClient = client;
 
         if (dbStatusEl) {
           dbStatusEl.style.background = 'rgba(16, 185, 129, 0.1)';
