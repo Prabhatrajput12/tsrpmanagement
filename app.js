@@ -38,6 +38,222 @@ const state = {
   dispatches: []
 };
 
+// --- Supabase Cloud Client Setup ---
+const supabaseUrl = localStorage.getItem('supabase_url') || '';
+const supabaseKey = localStorage.getItem('supabase_key') || '';
+let supabase = null;
+
+if (supabaseUrl && supabaseKey) {
+  try {
+    supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+  } catch (err) {
+    console.error("Supabase initialization error:", err);
+  }
+}
+
+async function syncAllToCloud() {
+  if (!supabase) return;
+  try {
+    // 1. Sync Materials
+    for (const m of state.materialsCatalog) {
+      await supabase.from('raw_materials').upsert({
+        id: m.id,
+        name: m.name,
+        category: m.category || '',
+        cost: m.cost || 0,
+        unit: m.unit || '',
+        stock: m.stock || 0,
+        min_stock: m.minStock || 0,
+        item_code: m.itemCode || '',
+        invoice_number: m.invoiceNumber || ''
+      });
+    }
+    if (state.materialsCatalog.length > 0) {
+      const ids = state.materialsCatalog.map(x => x.id);
+      await supabase.from('raw_materials').delete().not('id', 'in', `(${ids.join(',')})`);
+    } else {
+      await supabase.from('raw_materials').delete().neq('id', '');
+    }
+
+    // 2. Sync Blueprints
+    for (const t of state.templatesCatalog) {
+      await supabase.from('blueprints').upsert({
+        id: t.id,
+        name: t.name,
+        description: t.description || '',
+        po_number: t.poNumber || '',
+        mfg_time: t.mfgTime || 0,
+        mfg_time_unit: t.mfgTimeUnit || 'sec',
+        materials: t.materials || [],
+        operations: t.operations || []
+      });
+    }
+    if (state.templatesCatalog.length > 0) {
+      const ids = state.templatesCatalog.map(x => x.id);
+      await supabase.from('blueprints').delete().not('id', 'in', `(${ids.join(',')})`);
+    } else {
+      await supabase.from('blueprints').delete().neq('id', '');
+    }
+
+    // 3. Sync Estimates
+    for (const e of state.savedEstimates) {
+      await supabase.from('estimates').upsert({
+        id: e.id,
+        title: e.title,
+        client_name: e.clientName || '',
+        quantity: e.quantity || 1,
+        markup: e.markup || 30,
+        items: e.items || [],
+        labor: e.labor || [],
+        mfg_time: e.mfgTime || 0,
+        mfg_time_unit: e.mfgTimeUnit || 'sec',
+        template_id: e.templateId || null,
+        parts: e.parts || [],
+        totals: e.totals || {},
+        date: e.date,
+        time: e.time
+      });
+    }
+    if (state.savedEstimates.length > 0) {
+      const ids = state.savedEstimates.map(x => x.id);
+      await supabase.from('estimates').delete().not('id', 'in', `(${ids.join(',')})`);
+    } else {
+      await supabase.from('estimates').delete().neq('id', '');
+    }
+
+    // 4. Sync Dispatches
+    for (const d of state.dispatches) {
+      await supabase.from('dispatches').upsert({
+        id: d.id,
+        client_name: d.clientName || '',
+        estimate_title: d.estimateTitle || '',
+        gate_pass: d.gatePass || '',
+        vehicle_number: d.vehicleNumber || '',
+        driver_name: d.driverName || '',
+        status: d.status || '',
+        remarks: d.remarks || '',
+        date: d.date,
+        time: d.time,
+        items: d.items || []
+      });
+    }
+    if (state.dispatches.length > 0) {
+      const ids = state.dispatches.map(x => x.id);
+      await supabase.from('dispatches').delete().not('id', 'in', `(${ids.join(',')})`);
+    } else {
+      await supabase.from('dispatches').delete().neq('id', '');
+    }
+  } catch (err) {
+    console.error("Failed to sync to cloud:", err);
+  }
+}
+
+async function loadStateFromCloud() {
+  if (!supabase) return;
+  try {
+    const [matsRes, tplsRes, estsRes, dispsRes] = await Promise.all([
+      supabase.from('raw_materials').select('*'),
+      supabase.from('blueprints').select('*'),
+      supabase.from('estimates').select('*'),
+      supabase.from('dispatches').select('*')
+    ]);
+
+    if (matsRes.error) throw matsRes.error;
+    if (tplsRes.error) throw tplsRes.error;
+    if (estsRes.error) throw estsRes.error;
+    if (dispsRes.error) throw dispsRes.error;
+
+    if (matsRes.data) {
+      state.materialsCatalog = matsRes.data.map(m => ({
+        id: m.id,
+        name: m.name,
+        category: m.category || '',
+        cost: parseFloat(m.cost) || 0,
+        unit: m.unit || 'pcs',
+        stock: parseFloat(m.stock) || 0,
+        minStock: parseFloat(m.min_stock) || 0,
+        itemCode: m.item_code || '',
+        invoiceNumber: m.invoice_number || ''
+      }));
+    }
+
+    if (tplsRes.data) {
+      state.templatesCatalog = tplsRes.data.map(t => ({
+        id: t.id,
+        name: t.name,
+        description: t.description || '',
+        poNumber: t.po_number || '',
+        mfgTime: parseFloat(t.mfg_time) || 0,
+        mfgTimeUnit: t.mfg_time_unit || 'sec',
+        materials: t.materials || [],
+        operations: t.operations || []
+      }));
+    }
+
+    if (estsRes.data) {
+      state.savedEstimates = estsRes.data.map(e => ({
+        id: e.id,
+        title: e.title,
+        clientName: e.client_name || '',
+        quantity: parseInt(e.quantity) || 1,
+        markup: parseFloat(e.markup) || 30,
+        items: e.items || [],
+        labor: e.labor || [],
+        mfgTime: parseFloat(e.mfg_time) || 0,
+        mfgTimeUnit: e.mfg_time_unit || 'sec',
+        templateId: e.template_id || null,
+        parts: e.parts || [],
+        totals: e.totals || {},
+        date: e.date,
+        time: e.time
+      }));
+    }
+
+    if (dispsRes.data) {
+      state.dispatches = dispsRes.data.map(d => ({
+        id: d.id,
+        clientName: d.client_name || '',
+        estimateTitle: d.estimate_title || '',
+        gatePass: d.gate_pass || '',
+        vehicleNumber: d.vehicle_number || '',
+        driverName: d.driver_name || '',
+        status: d.status || '',
+        remarks: d.remarks || '',
+        date: d.date,
+        time: d.time,
+        items: d.items || []
+      }));
+    }
+
+    // Update local storage cache
+    localStorage.setItem('ws_materials', JSON.stringify(state.materialsCatalog));
+    localStorage.setItem('ws_templates', JSON.stringify(state.templatesCatalog));
+    localStorage.setItem('ws_estimates', JSON.stringify(state.savedEstimates));
+    localStorage.setItem('ws_dispatches', JSON.stringify(state.dispatches));
+
+    // Refresh active views
+    const activeTab = state.activeTab || 'dashboard';
+    switchTab(activeTab);
+    populateSelectors();
+    updateGlobalAlerts();
+  } catch (err) {
+    console.error("Error loading cloud data:", err);
+  }
+}
+
+function setupRealtimeSync() {
+  if (!supabase) return;
+  try {
+    supabase.channel('public-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        loadStateFromCloud();
+      })
+      .subscribe();
+  } catch (err) {
+    console.error("Realtime subscription setup failed:", err);
+  }
+}
+
 // --- Initializing State from LocalStorage ---
 function loadStateFromStorage() {
   state.theme = localStorage.getItem('ws_calc_theme') || 'dark';
@@ -53,6 +269,11 @@ function loadStateFromStorage() {
   state.templatesCatalog = JSON.parse(localStorage.getItem('ws_templates')) || DEFAULT_TEMPLATES;
   state.savedEstimates = JSON.parse(localStorage.getItem('ws_estimates')) || [];
   state.dispatches = JSON.parse(localStorage.getItem('ws_dispatches')) || [];
+
+  if (supabase) {
+    loadStateFromCloud();
+    setupRealtimeSync();
+  }
 }
 
 function saveStateToStorage() {
@@ -61,6 +282,9 @@ function saveStateToStorage() {
   localStorage.setItem('ws_templates', JSON.stringify(state.templatesCatalog));
   localStorage.setItem('ws_estimates', JSON.stringify(state.savedEstimates));
   localStorage.setItem('ws_dispatches', JSON.stringify(state.dispatches));
+  if (supabase) {
+    syncAllToCloud();
+  }
 }
 
 // --- Helper Functions ---
@@ -3476,6 +3700,100 @@ document.addEventListener('DOMContentLoaded', () => {
           .map(cb => cb.getAttribute('data-id'));
         if (selected.length > 0) {
           openPrintPreviewForMultipleDispatches(selected);
+        }
+      }
+    });
+  }
+
+  // Cloud DB Settings Modal Event Listeners
+  const dbModal = document.getElementById('db-settings-modal');
+  const dbBtn = document.getElementById('db-settings-btn');
+  const closeDbModalBtn = document.getElementById('close-db-settings-modal');
+  const cancelDbBtn = document.getElementById('close-db-settings-btn');
+  const saveDbBtn = document.getElementById('save-db-settings-btn');
+  const dbUrlInput = document.getElementById('db-supabase-url');
+  const dbKeyInput = document.getElementById('db-supabase-key');
+  const dbStatusEl = document.getElementById('db-status-message');
+
+  if (dbBtn && dbModal) {
+    dbBtn.addEventListener('click', () => {
+      if (dbUrlInput) dbUrlInput.value = localStorage.getItem('supabase_url') || '';
+      if (dbKeyInput) dbKeyInput.value = localStorage.getItem('supabase_key') || '';
+      if (dbStatusEl) dbStatusEl.style.display = 'none';
+      dbModal.classList.add('active');
+    });
+  }
+
+  const closeDbModal = () => {
+    if (dbModal) dbModal.classList.remove('active');
+  };
+
+  if (closeDbModalBtn) closeDbModalBtn.addEventListener('click', closeDbModal);
+  if (cancelDbBtn) cancelDbBtn.addEventListener('click', closeDbModal);
+
+  if (saveDbBtn) {
+    saveDbBtn.addEventListener('click', async () => {
+      const url = dbUrlInput ? dbUrlInput.value.trim() : '';
+      const key = dbKeyInput ? dbKeyInput.value.trim() : '';
+
+      if (dbStatusEl) {
+        dbStatusEl.style.display = 'block';
+        dbStatusEl.style.background = 'rgba(255, 193, 7, 0.1)';
+        dbStatusEl.style.color = '#ffc107';
+        dbStatusEl.innerText = "Testing connection and syncing data...";
+      }
+
+      if (!url || !key) {
+        // Clear Supabase settings (disconnect)
+        localStorage.removeItem('supabase_url');
+        localStorage.removeItem('supabase_key');
+        supabase = null;
+        if (dbStatusEl) {
+          dbStatusEl.style.background = 'rgba(239, 68, 68, 0.1)';
+          dbStatusEl.style.color = '#ef4444';
+          dbStatusEl.innerText = "Disconnected from cloud. Switched to local mode.";
+        }
+        setTimeout(() => {
+          closeDbModal();
+          window.location.reload();
+        }, 1500);
+        return;
+      }
+
+      try {
+        const client = window.supabase.createClient(url, key);
+        // Test connection by querying raw_materials table
+        const { error } = await client.from('raw_materials').select('id').limit(1);
+        if (error) throw error;
+
+        // Connection successful! Save credentials
+        localStorage.setItem('supabase_url', url);
+        localStorage.setItem('supabase_key', key);
+        supabase = client;
+
+        if (dbStatusEl) {
+          dbStatusEl.style.background = 'rgba(16, 185, 129, 0.1)';
+          dbStatusEl.style.color = '#10b981';
+          dbStatusEl.innerText = "Successfully connected! Syncing local data to cloud...";
+        }
+
+        // Upload local data to Supabase immediately on connect!
+        await syncAllToCloud();
+
+        if (dbStatusEl) {
+          dbStatusEl.innerText = "Cloud database synced! Reloading...";
+        }
+
+        setTimeout(() => {
+          closeDbModal();
+          window.location.reload();
+        }, 1500);
+      } catch (err) {
+        console.error("Supabase connection failed:", err);
+        if (dbStatusEl) {
+          dbStatusEl.style.background = 'rgba(239, 68, 68, 0.1)';
+          dbStatusEl.style.color = '#ef4444';
+          dbStatusEl.innerText = "Connection failed: " + err.message + "\n(Did you run the SQL script to create the tables?)";
         }
       }
     });

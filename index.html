@@ -84,6 +84,11 @@
       </nav>
       
       <div class="sidebar-footer">
+        <button id="db-settings-btn" class="theme-toggle-btn" style="margin-bottom: 8px; background: rgba(79, 70, 229, 0.1); border-color: rgba(79, 70, 229, 0.3); color: var(--accent-primary);">
+          <span style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+            ☁️ Cloud DB Settings
+          </span>
+        </button>
         <button id="theme-toggle" class="theme-toggle-btn">
           <span id="theme-toggle-text" style="display: flex; align-items: center; justify-content: center; gap: 6px;">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
@@ -648,6 +653,114 @@
     </div>
   </div>
 
+  <!-- Cloud Database Settings Modal -->
+  <div id="db-settings-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 550px;">
+      <div class="modal-header">
+        <h3>Cloud Database Settings</h3>
+        <button id="close-db-settings-modal" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.4;">
+          Connect your application to a central **Supabase** PostgreSQL database to share estimates, blueprints, raw materials, and shipping dispatches in real-time across multiple devices.
+        </p>
+        <div class="form-group">
+          <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Supabase URL</label>
+          <input type="text" id="db-supabase-url" class="form-control" placeholder="https://xxxxxxxxxxxxxx.supabase.co" style="font-size: 0.85rem; height: 38px;">
+        </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Supabase Anon Key</label>
+          <input type="password" id="db-supabase-key" class="form-control" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." style="font-size: 0.85rem; height: 38px;">
+        </div>
+        <div id="db-status-message" style="margin-top: 12px; font-size: 0.8rem; display: none; padding: 8px 12px; border-radius: 4px;"></div>
+        
+        <div style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 12px;">
+          <h4 style="font-size: 0.8rem; margin-bottom: 8px; text-transform: uppercase; color: var(--text-secondary);">Database Table SQL Script</h4>
+          <p style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px;">Copy the SQL code below and paste it into your Supabase **SQL Editor** to create the required tables:</p>
+          <textarea readonly style="width: 100%; height: 120px; font-family: monospace; font-size: 0.72rem; padding: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-muted); resize: vertical;">
+-- 1. Create raw_materials table
+create table if not exists public.raw_materials (
+  id text primary key,
+  name text not null,
+  category text,
+  cost numeric,
+  unit text,
+  stock numeric,
+  min_stock numeric,
+  item_code text,
+  invoice_number text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 2. Create blueprints table
+create table if not exists public.blueprints (
+  id text primary key,
+  name text not null,
+  description text,
+  po_number text,
+  mfg_time numeric,
+  mfg_time_unit text,
+  materials jsonb,
+  operations jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 3. Create estimates table
+create table if not exists public.estimates (
+  id text primary key,
+  title text not null,
+  client_name text,
+  quantity numeric,
+  markup numeric,
+  items jsonb,
+  labor jsonb,
+  mfg_time numeric,
+  mfg_time_unit text,
+  template_id text,
+  parts jsonb,
+  totals jsonb,
+  date text,
+  time text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 4. Create dispatches table
+create table if not exists public.dispatches (
+  id text primary key,
+  client_name text,
+  estimate_title text,
+  gate_pass text,
+  vehicle_number text,
+  driver_name text,
+  status text,
+  remarks text,
+  date text,
+  time text,
+  items jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 5. Enable row level security (RLS)
+alter table public.raw_materials enable row level security;
+alter table public.blueprints enable row level security;
+alter table public.estimates enable row level security;
+alter table public.dispatches enable row level security;
+
+-- 6. Create policies for public access (anon) for read/write
+create policy "Allow all users to manage raw_materials" on public.raw_materials for all using (true) with check (true);
+create policy "Allow all users to manage blueprints" on public.blueprints for all using (true) with check (true);
+create policy "Allow all users to manage estimates" on public.estimates for all using (true) with check (true);
+create policy "Allow all users to manage dispatches" on public.dispatches for all using (true) with check (true);
+          </textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="close-db-settings-btn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="save-db-settings-btn">Save & Connect</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PDF Print Preview Modal -->
   <div id="print-modal" class="modal-overlay">
     <div class="modal-card" style="max-width: 900px;">
@@ -670,6 +783,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>
 </html>
