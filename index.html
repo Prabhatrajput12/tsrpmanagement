@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TSRP Plast Estimate & Inventory Manager</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Sidebar Navigation (Mockup Design) -->
+    <aside class="sidebar">
+      
+      <!-- Logo Container -->
+      <div class="logo-container" style="justify-content: space-between; align-items: center; width: 100%;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="logo-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+            </svg>
+          </div>
+          <span class="logo-text" style="line-height: 1.1; display: inline-block;">TSRP<br><span style="font-size: 0.75rem; color: var(--accent-tertiary); letter-spacing: 1px; font-weight: 700;">PLAST</span></span>
+        </div>
+        
+        <!-- Notification Bell (Global stock warning) -->
+        <div class="bell-container no-print">
+          <button id="notification-bell" class="btn-stock-adjust" style="width: 32px; height: 32px; border-radius: 50%; position: relative; border-color: var(--border-color);" title="Inventory Stock Alerts">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            <span id="bell-badge" class="bell-badge" style="display: none;">0</span>
+          </button>
+          <div id="notification-dropdown" class="notification-dropdown" style="left: 0; right: auto; margin-top: 10px;">
+            <div class="notification-dropdown-header">Low Stock Warnings</div>
+            <div id="notification-list" class="notification-list">
+              <!-- JS Injected Alerts -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search Box & Purple Tool Button -->
+      <div class="sidebar-search-container no-print" style="position: relative;">
+        <input type="text" id="module-search" class="sidebar-search-input" placeholder="Search database...">
+        <button id="purple-tool-btn" class="purple-tool-btn" title="Quick Actions">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+        </button>
+        <!-- Floating global search results dropdown -->
+        <div id="global-search-results" class="global-search-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #0f1120; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; max-height: 250px; overflow-y: auto; z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-top: 5px;"></div>
+      </div>
+      
+      <!-- Navigation Links -->
+      <nav class="nav-links">
+        <li class="nav-item active" data-tab="dashboard">
+          <button type="button">
+            <span style="font-size: 1.15rem; margin-right: 4px;">🏡</span> Dashboard
+          </button>
+        </li>
+        <li class="nav-item" data-tab="parts">
+          <button type="button">
+            <span style="font-size: 1.15rem; margin-right: 4px;">📦</span> Parts
+          </button>
+        </li>
+        <li class="nav-item" data-tab="inventory">
+          <button type="button">
+            <span style="font-size: 1.15rem; margin-right: 4px;">📚</span> Inventory
+          </button>
+        </li>
+        <li class="nav-item" data-tab="production">
+          <button type="button">
+            <span style="font-size: 1.15rem; margin-right: 4px;">⚙️</span> Production
+          </button>
+        </li>
+        <li class="nav-item" data-tab="dispatch">
+          <button type="button">
+            <span style="font-size: 1.15rem; margin-right: 4px;">🚚</span> Dispatch
+          </button>
+        </li>
+        <li class="nav-item" data-tab="reports">
+          <button type="button">
+            <span style="font-size: 1.15rem; margin-right: 4px;">📄</span> Reports
+          </button>
+        </li>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <button id="theme-toggle" class="theme-toggle-btn">
+          <span id="theme-toggle-text" style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            Switch to Light
+          </span>
+        </button>
+        <div style="font-size: 0.75rem; text-align: center; color: var(--text-muted);">
+          &copy; 2026 TSRP Plast
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- 1. DASHBOARD TAB PANEL -->
+      <section id="dashboard-panel" class="tab-panel active">
+        <header class="main-header">
+          <div class="header-title-section">
+            <h1>Workshop Dashboard</h1>
+            <p>Live summary of material assets, stock status, active jobs, and workshop labor.</p>
+          </div>
+        </header>
+
+        <!-- KPI summaries -->
+        <div class="kpi-container" style="margin-bottom: 32px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; max-width: 900px;">
+          <div class="card kpi-card">
+            <div class="kpi-icon-box pink">🔔</div>
+            <div class="kpi-details">
+              <p>Low Stock Items</p>
+              <div id="kpi-low-stock-count" class="kpi-value" style="color: var(--color-danger);">0</div>
+            </div>
+          </div>
+          <div class="card kpi-card">
+            <div class="kpi-icon-box emerald">📄</div>
+            <div class="kpi-details">
+              <p>Saved Client Quotes</p>
+              <div id="kpi-saved-quotes-count" class="kpi-value">0</div>
+            </div>
+          </div>
+          <div class="card kpi-card">
+            <div class="kpi-icon-box indigo">🚚</div>
+            <div class="kpi-details">
+              <p>Dispatched Shipments</p>
+              <div id="kpi-dispatches-count" class="kpi-value">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts Grid (Live Material Stock Levels Only) -->
+        <div style="margin-bottom: 28px;">
+          <div class="card">
+            <div class="card-title">
+              <span>Live Material Stock Levels</span>
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Real-time stock vs. min threshold limit</span>
+            </div>
+            <!-- Injected by JS -->
+            <div id="dashboard-stock-chart" style="display: flex; flex-direction: column; min-height: 250px; justify-content: center;">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. PARTS TAB PANEL -->
+      <section id="parts-panel" class="tab-panel">
+        <header class="main-header">
+          <div class="header-title-section">
+            <h1>Parts & Recipe Templates</h1>
+            <p>Define product blueprints, raw material requirements, and production step operations.</p>
+          </div>
+          <div class="header-actions no-print">
+            <button id="open-add-part-modal" class="btn btn-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Create Part Blueprint
+            </button>
+          </div>
+        </header>
+
+        <div id="parts-grid-container" class="catalog-grid">
+          <!-- Populated dynamically by JS -->
+        </div>
+      </section>
+
+      <!-- 3. INVENTORY TAB PANEL -->
+      <section id="inventory-panel" class="tab-panel">
+        <header class="main-header">
+          <div class="header-title-section">
+            <h1>Materials Inventory Directory</h1>
+            <p>Configure stock levels, default pricing values, waste buffer margins, and alerts thresholds.</p>
+          </div>
+          <div class="header-actions no-print">
+            <button id="open-add-material-modal" class="btn btn-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Add New Material
+            </button>
+          </div>
+        </header>
+
+        <div id="catalog-materials-grid" class="catalog-grid">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- 4. PRODUCTION ESTIMATOR TAB PANEL -->
+      <section id="production-panel" class="tab-panel">
+        <header class="main-header">
+          <div class="header-title-section">
+            <h1>Production Estimator</h1>
+            <p>Load part blueprints, enter quantities, adjust markup margins, and run lead time calculations.</p>
+          </div>
+          <div class="header-actions no-print">
+            <button id="reset-estimate-btn" class="btn btn-secondary">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+              Clear Workspace
+            </button>
+            <button id="save-estimate-btn" class="btn btn-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+              Save Estimate
+            </button>
+          </div>
+        </header>
+
+        <!-- Estimator Blueprint Header -->
+        <div class="card no-print" style="margin-bottom: 28px;">
+          <!-- Top Estimator Inputs -->
+          <div class="grid-3">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="template-select">Select Part Blueprint</label>
+              <select id="template-select" class="form-control">
+                <!-- Populated by JS -->
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="estimate-title-input">Estimate Label</label>
+              <input type="text" id="estimate-title-input" class="form-control" value="New Estimate">
+            </div>
+            <div class="form-group" style="margin-bottom: 0; display: none;">
+              <label class="form-label" for="client-name-input">Client Representative</label>
+              <input type="text" id="client-name-input" class="form-control" value="Walk-in Client">
+            </div>
+            <div class="form-group" style="margin-bottom: 0; display: none;">
+              <label class="form-label" for="product-qty-input">Production Quantity</label>
+              <input type="number" min="1" id="product-qty-input" class="form-control" value="1">
+            </div>
+          </div>
+        </div>
+
+        <!-- Estimator KPI Cards -->
+        <div style="margin-bottom: 28px; display: grid; grid-template-columns: 1fr; max-width: 350px;">
+          <div class="card kpi-card">
+            <div class="kpi-icon-box indigo">⏱️</div>
+            <div class="kpi-details" style="width: 100%;">
+              <p>Total Manufacturing Time</p>
+              <div id="kpi-total-time" class="kpi-value">0s</div>
+              <div id="kpi-time-breakdown" style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 4px; display: none; line-height: 1.4; border-top: 1px dashed var(--border-color); padding-top: 4px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Workspace Estimator Grid -->
+        <div class="grid-estimator">
+          
+          <div class="workspace-inputs" style="display: flex; flex-direction: column; gap: 28px;">
+            <!-- Materials Required -->
+            <div class="card">
+              <div class="card-title" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
+                <span>Raw Materials Allocations</span>
+                <div class="no-print" style="display: flex; align-items: center; gap: 8px;">
+                  <label for="material-allocation-filter" style="font-size: 0.8rem; font-weight: normal; color: var(--text-secondary); margin: 0;">Configure Raw Material:</label>
+                  <select id="material-allocation-filter" class="form-control" style="width: 200px; height: 32px; padding: 4px 8px; font-size: 0.85rem; margin: 0;"></select>
+                </div>
+              </div>
+              <div class="item-fields-grid material-fields" style="padding: 0 12px 10px 12px; border-bottom: 1px solid var(--border-color); margin-bottom: 12px; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">
+                <span>Raw Material Name</span>
+                <span>Qty / Unit</span>
+                <span>Comp. Wt</span>
+                <span>Runner Wt</span>
+                <span>Wt. Unit</span>
+                <span style="text-align: right;">Calculated Qty</span>
+              </div>
+              <div id="materials-list-container" class="items-list"></div>
+              <div class="no-print">
+                <select id="add-material-select" class="form-control" style="border-style: dashed; border-width: 2px; text-align: center; font-weight: 500;"></select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Totals Panel -->
+          <div class="workspace-outputs" style="display: flex; flex-direction: column; gap: 28px;">
+            <div class="card">
+              <div class="card-title">
+                <span>Operations & Actions</span>
+              </div>
+              <div class="slider-container no-print" style="display: none;">
+                <div class="slider-header">
+                  <span>Target Markup Profit Margin</span>
+                  <span id="markup-val" class="slider-val">30%</span>
+                </div>
+                <input type="range" min="0" max="200" value="30" class="slider-input" id="markup-slider">
+              </div>
+              <div style="display: none; flex-direction: column; gap: 14px; font-size: 0.95rem; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-secondary);">Workshop Production Cost:</span>
+                  <span id="kpi-base-cost" style="font-weight: 600;">₹0.00</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: var(--text-secondary);">Profit Margin Markup:</span>
+                  <span id="kpi-markup-amount" style="font-weight: 600; color: var(--color-success);">₹0.00</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 1.25rem; font-weight: 800; border-top: 1px solid var(--border-color); padding-top: 14px; margin-top: 4px;">
+                  <span>Grand Total Price:</span>
+                  <span id="kpi-final-price" style="background: var(--text-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">₹0.00</span>
+                </div>
+              </div>
+              
+              <div class="no-print" style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <button id="save-recipe-btn" class="btn btn-secondary btn-sm" title="Save Active Configuration as Part Recipe">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    Save as Part
+                  </button>
+                  <button id="preview-pdf-btn" class="btn btn-primary btn-sm" title="Preview and Print/Save Quote as PDF">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                    Print / Save PDF
+                  </button>
+                </div>
+                <button id="book-order-btn" class="btn btn-secondary btn-sm" style="background: rgba(16, 185, 129, 0.12); color: var(--accent-tertiary); border: 1px solid rgba(16, 185, 129, 0.25); font-weight: 700; width: 100%;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><polyline points="9 11 12 14 22 4"></polyline></svg>
+                  Fulfill & Deduct Stock
+                </button>
+              </div>
+            </div>
+
+            <!-- Cost donut chart -->
+            <div class="card" style="display: none;">
+              <div class="card-title">Cost Breakdown</div>
+              <div id="cost-chart-container" style="display: flex; gap: 20px;"></div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 5. DISPATCH TAB PANEL -->
+      <section id="dispatch-panel" class="tab-panel">
+        <header class="main-header">
+          <div class="header-title-section">
+            <h1>Dispatch & Shipping Logs</h1>
+            <p>Manage and log deliveries, print delivery challans, and track gate pass records.</p>
+          </div>
+          <div class="header-actions no-print">
+            <button id="open-create-dispatch-btn" class="btn btn-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              New Dispatch / Challan
+            </button>
+          </div>
+        </header>
+
+        <div class="no-print" id="dispatch-bulk-actions" style="display: none; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); padding: 12px 20px; margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="dispatch-select-all" style="width: 16px; height: 16px; cursor: pointer; margin: 0;">
+            <label for="dispatch-select-all" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); cursor: pointer; margin: 0;">Select All</label>
+          </div>
+          <button id="print-selected-dispatches-btn" class="btn btn-primary btn-sm" style="height: 32px; padding: 0 12px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            Print Selected (<span id="dispatch-selected-count">0</span>)
+          </button>
+        </div>
+
+        <div id="dispatch-list-container" class="history-list">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- 6. REPORTS TAB PANEL -->
+      <section id="reports-panel" class="tab-panel">
+        <header class="main-header">
+          <div class="header-title-section">
+            <h1>Reports & Invoice History</h1>
+            <p>Track historical client estimates, production logs, and aggregate financial metrics.</p>
+          </div>
+          <div class="header-actions no-print">
+            <button id="print-summary-report-btn" class="btn btn-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+              Print History Summary (PDF)
+            </button>
+          </div>
+        </header>
+        
+        <!-- Database Backup Controls (no-print) -->
+        <div class="card no-print" style="margin-bottom: 24px; padding: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--border-radius-md);">
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">Database Backup & Portability</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Transfer your inventory database, blueprints, and quotes history between devices or create offline backups.</span>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <button id="db-backup-btn" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 6px;" title="Download backup file to your computer">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Export Backup (.json)
+            </button>
+            <button id="db-restore-btn" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 6px;" title="Upload a backup file to restore your database">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              Import Backup
+            </button>
+            <!-- Hidden File Input for Restore -->
+            <input type="file" id="db-restore-input" accept=".json" style="display: none;">
+          </div>
+        </div>
+
+        <div id="history-list-container" class="history-list">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+
+
+    </main>
+
+  </div>
+
+  <!-- MODALS SECTION -->
+
+  <!-- Add Part Blueprint Modal -->
+  <div id="catalog-part-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 800px;">
+      <div class="modal-header">
+        <h3>Create New Part Blueprint</h3>
+        <button id="close-part-modal" class="close-btn">&times;</button>
+      </div>
+      <form id="add-part-form">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 18px;">
+          <div class="grid-2" style="gap: 15px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Part Blueprint Name</label>
+              <input type="text" id="new-part-name" class="form-control" required placeholder="e.g. Custom Steel Table Leg">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">PO Number</label>
+              <input type="text" id="new-part-po" class="form-control" placeholder="e.g. PO-98765">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea id="new-part-desc" class="form-control" style="min-height: 60px; resize: vertical;" placeholder="A brief description of this manufactured part..."></textarea>
+          </div>
+          <div class="grid-2" style="gap: 15px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Mfg. Time per Part</label>
+              <input type="number" id="new-part-mfg-time" class="form-control" min="0" step="any" value="0">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Time Unit</label>
+              <select id="new-part-mfg-time-unit" class="form-control">
+                <option value="sec" selected>Seconds (sec)</option>
+                <option value="min">Minutes (min)</option>
+                <option value="hr">Hours (hr)</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="card" style="padding: 16px; background: rgba(0,0,0,0.15); width: 100%;">
+            <h4 style="font-size: 0.9rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 12px;">Materials Config</h4>
+            
+            <!-- Materials Mixing Options -->
+            <div id="blueprint-mixing-options" style="display: none; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: var(--border-radius-sm); padding: 12px; margin-bottom: 12px; flex-direction: column; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="blueprint-mix-toggle" style="width: 16px; height: 16px; cursor: pointer; margin: 0;">
+                <label for="blueprint-mix-toggle" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); cursor: pointer; margin: 0;">Mix Materials by Percentage / Ratio</label>
+              </div>
+              <div id="blueprint-mixing-weights" style="display: none; grid-template-columns: 1.2fr 1.2fr 1fr; gap: 12px; margin-top: 8px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px; display: block;">Total Comp. Wt</label>
+                  <input type="number" min="0" step="any" id="blueprint-mix-comp-weight" class="form-control" style="height: 32px; padding: 4px 8px; font-size: 0.85rem;" value="0">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px; display: block;">Total Runner Wt</label>
+                  <input type="number" min="0" step="any" id="blueprint-mix-run-weight" class="form-control" style="height: 32px; padding: 4px 8px; font-size: 0.85rem;" value="0">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px; display: block;">Wt. Unit</label>
+                  <select id="blueprint-mix-weight-unit" class="form-control" style="height: 32px; padding: 4px 8px; font-size: 0.85rem; height: 32px; line-height: 22px;">
+                    <option value="g" selected>g</option>
+                    <option value="kg">kg</option>
+                    <option value="lbs">lbs</option>
+                    <option value="oz">oz</option>
+                  </select>
+                </div>
+              </div>
+              <div id="blueprint-mix-percentage-sum" style="display: none; font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                Total Percentage: <span id="blueprint-mix-percentage-sum-val" style="font-weight: 700;">0%</span>
+              </div>
+            </div>
+
+            <div id="new-part-materials-container" style="display: flex; flex-direction: column; gap: 10px; max-height: 180px; overflow-y: auto; margin-bottom: 16px;">
+              <!-- Dynamically injected selected items -->
+            </div>
+            
+            <div style="display: flex; gap: 10px; align-items: center; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); flex-wrap: wrap;">
+              <div style="flex: 2; min-width: 180px;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 4px; display: block; color: var(--text-secondary);">Raw Material</label>
+                <input type="text" id="modal-add-material-input" class="form-control" list="modal-material-datalist" placeholder="e.g. Oak Planks" style="font-size: 0.85rem; height: 38px;">
+                <datalist id="modal-material-datalist"></datalist>
+              </div>
+              <input type="hidden" id="modal-add-material-cost" value="0">
+              <div style="width: 80px;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 4px; display: block; color: var(--text-secondary);">Unit</label>
+                <input type="text" id="modal-add-material-unit" class="form-control" style="font-size: 0.85rem; height: 38px; padding: 6px 10px;" value="pcs" placeholder="pcs">
+              </div>
+              <div style="width: 90px; display: none;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 4px; display: block; color: var(--text-secondary);">Quantity</label>
+                <input type="number" id="modal-add-material-qty" class="form-control" style="font-size: 0.85rem; height: 38px; padding: 6px 10px;" value="1" min="0.01" step="any">
+              </div>
+              <div style="width: 100px;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 4px; display: block; color: var(--text-secondary);">Comp. Wt</label>
+                <input type="number" id="modal-add-material-component-weight" class="form-control" style="font-size: 0.85rem; height: 38px; padding: 6px 10px;" value="0" min="0" step="any">
+              </div>
+              <div style="width: 100px;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 4px; display: block; color: var(--text-secondary);">Runner Wt</label>
+                <input type="number" id="modal-add-material-runner-weight" class="form-control" style="font-size: 0.85rem; height: 38px; padding: 6px 10px;" value="0" min="0" step="any">
+              </div>
+              <div style="width: 80px;">
+                <label class="form-label" style="font-size: 0.75rem; margin-bottom: 4px; display: block; color: var(--text-secondary);">Wt. Unit</label>
+                <select id="modal-add-material-weight-unit" class="form-control" style="font-size: 0.85rem; height: 38px; padding: 6px 10px;">
+                  <option value="g" selected>g</option>
+                  <option value="kg">kg</option>
+                  <option value="lbs">lbs</option>
+                  <option value="oz">oz</option>
+                </select>
+              </div>
+              <div style="align-self: flex-end;">
+                <button type="button" id="modal-add-material-btn" class="btn btn-secondary" style="height: 38px; padding: 0 16px; font-size: 0.85rem;">+ Add Material</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeAddPartModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Part Blueprint</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Material Modal -->
+  <div id="catalog-material-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Create New Inventory Material</h3>
+        <button id="close-mat-modal" class="close-btn">&times;</button>
+      </div>
+      <form id="add-material-form">
+        <div class="modal-body">
+          <div class="grid-3" style="gap: 15px; margin-bottom: 15px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Material Name</label>
+              <input type="text" id="new-mat-name" class="form-control" required placeholder="e.g. Aluminum Tube (1in)">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Item Code</label>
+              <input type="text" id="new-mat-code" class="form-control" placeholder="e.g. MAT-00123">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Invoice Number</label>
+              <input type="text" id="new-mat-invoice" class="form-control" placeholder="e.g. INV-98765">
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Category</label>
+              <input type="text" id="new-mat-category" class="form-control" required placeholder="e.g. Metal, Hardware, Wood">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Stock Unit</label>
+              <input type="text" id="new-mat-unit" class="form-control" required placeholder="e.g. meter, pc, sheet, kg">
+            </div>
+            <input type="hidden" id="new-mat-cost" value="0">
+          </div>
+          <div class="grid-2" style="margin-top: 16px;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Starting Stock Quantity</label>
+              <input type="number" step="any" min="0" id="new-mat-stock" class="form-control" required value="100">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Min Alert Threshold</label>
+              <input type="number" step="any" min="0" id="new-mat-min" class="form-control" required value="10">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeAddMaterialModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save to Catalog</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create Dispatch Modal -->
+  <div id="create-dispatch-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3>Create Delivery Challan & Dispatch</h3>
+        <button type="button" class="close-btn" onclick="closeCreateDispatchModal()">&times;</button>
+      </div>
+      <form id="create-dispatch-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="dispatch-estimate-select">Select Saved Quote / Estimate <span style="color: var(--color-danger);">*</span></label>
+            <select id="dispatch-estimate-select" class="form-control" required>
+              <option value="" disabled selected>-- Select an Estimate --</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label" for="dispatch-client-input">Client Representative</label>
+            <input type="text" id="dispatch-client-input" class="form-control" placeholder="Client Name" required>
+          </div>
+          
+          <div class="card" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 16px; margin-bottom: 20px;">
+            <div style="font-weight: 600; margin-bottom: 12px; font-size: 0.9rem; color: var(--text-primary);">Dispatched Parts & Quantities</div>
+            <div id="dispatch-parts-list-container" style="display: flex; flex-direction: column; gap: 10px;">
+              <span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">Select a saved estimate to configure parts.</span>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label" for="dispatch-vehicle-input">Vehicle Number</label>
+              <input type="text" id="dispatch-vehicle-input" class="form-control" placeholder="e.g., MH-12-AB-1234">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="dispatch-driver-input">Driver Name</label>
+              <input type="text" id="dispatch-driver-input" class="form-control" placeholder="e.g., John Doe">
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label" for="dispatch-gatepass-input">Gate Pass / Challan No.</label>
+              <input type="text" id="dispatch-gatepass-input" class="form-control" placeholder="e.g., CH-10023">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="dispatch-status-select">Status</label>
+              <select id="dispatch-status-select" class="form-control">
+                <option value="Dispatched">Dispatched</option>
+                <option value="In Transit">In Transit</option>
+                <option value="Delivered">Delivered</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="dispatch-remarks-input">Remarks / Dispatch Notes</label>
+            <textarea id="dispatch-remarks-input" class="form-control" style="height: 60px; resize: vertical;" placeholder="Additional instructions or notes..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeCreateDispatchModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Dispatch & Challan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PDF Print Preview Modal -->
+  <div id="print-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 900px;">
+      <div class="modal-header no-print">
+        <h3>Estimate Quote PDF Preview</h3>
+        <button id="close-print-modal" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="print-area-container">
+          <!-- Injected by JS -->
+        </div>
+      </div>
+      <div class="modal-footer no-print">
+        <button type="button" class="btn btn-secondary" onclick="closePrintPreview()">Close Preview</button>
+        <button id="execute-print-btn" type="button" class="btn btn-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          Print / Save PDF
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
