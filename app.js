@@ -2408,7 +2408,7 @@ function handleCreateDispatchSubmit(e) {
         const fullQty = calcBoxes * pcsVal;
         const lowerQty = (calcBoxes - 1) * pcsVal;
         const neededQty = fullQty - qty;
-        validationErrors.push(`Validation Error for "${partLabel}":\nFor ${calcBoxes} box(es), max pieces are ${fullQty} (each box contains ${pcsVal} pcs). You dispatched ${qty} pcs. Add ${neededQty} pcs to full the last box.`);
+        validationErrors.push(`Validation Warning for "${partLabel}":\nFor ${calcBoxes} box(es), max pieces are ${fullQty} (each box contains ${pcsVal} pcs). You dispatched ${qty} pcs. Add ${neededQty} pcs to full the last box.`);
       }
 
       dispatchedItems.push({
@@ -2424,8 +2424,9 @@ function handleCreateDispatchSubmit(e) {
   });
 
   if (validationErrors.length > 0) {
-    alert(validationErrors[0]);
-    return; // Do not go forward!
+    if (!confirm(`${validationErrors[0]}\n\nDo you want to proceed anyway?`)) {
+      return; // Do not go forward!
+    }
   }
 
   if (dispatchedItems.length === 0) {
