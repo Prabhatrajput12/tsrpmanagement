@@ -25,6 +25,12 @@
       <form id="auth-login-form">
         <div id="auth-mode-indicator" style="font-size: 0.75rem; color: var(--accent-primary); text-transform: uppercase; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.5px; text-align: center;">Local Database Lock</div>
         
+        <!-- Username field for Local Mode (hidden in Supabase mode) -->
+        <div class="form-group" id="auth-username-group" style="margin-bottom: 12px;">
+          <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Username</label>
+          <input type="text" id="auth-username" class="form-control" placeholder="e.g. admin" style="height: 38px; font-size: 0.85rem;" required>
+        </div>
+
         <!-- Email field for Supabase (hidden in Local mode) -->
         <div class="form-group" id="auth-email-group" style="display: none; margin-bottom: 12px;">
           <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Email Address</label>
@@ -1124,6 +1130,12 @@ create policy "Allow all users to manage production_history" on public.productio
           <div class="form-group" style="margin-bottom: 12px;">
             <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Current Password</label>
             <input type="password" id="security-current-password" class="form-control" placeholder="••••••••" style="font-size: 0.85rem; height: 38px; width: 100%; border-radius: 6px; box-sizing: border-box;" required>
+          </div>
+
+          <!-- Username field for Local Mode (hidden in Supabase mode) -->
+          <div class="form-group" id="security-username-group" style="margin-bottom: 12px;">
+            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Username</label>
+            <input type="text" id="security-username" class="form-control" placeholder="e.g. admin" style="font-size: 0.85rem; height: 38px; width: 100%; border-radius: 6px; box-sizing: border-box;">
           </div>
           
           <div style="border-top: 1px solid var(--border-color); margin: 16px 0; padding-top: 16px;">

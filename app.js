@@ -61,6 +61,9 @@ if (supabaseUrl && supabaseKey) {
 let authMode = 'login'; // 'login' or 'signup' for Supabase Auth mode
 
 function initLocalAuth() {
+  if (!localStorage.getItem('ws_local_username')) {
+    localStorage.setItem('ws_local_username', 'admin');
+  }
   if (!localStorage.getItem('ws_master_password')) {
     localStorage.setItem('ws_master_password', 'admin123');
   }
@@ -76,18 +79,24 @@ async function initAuth() {
   initLocalAuth();
   
   const authOverlay = document.getElementById('auth-overlay');
+  const authUsernameGroup = document.getElementById('auth-username-group');
   const authEmailGroup = document.getElementById('auth-email-group');
   const authPasswordLabel = document.getElementById('auth-password-label');
   const authModeIndicator = document.getElementById('auth-mode-indicator');
   const authSubmitBtn = document.getElementById('auth-submit-btn');
   const authToggleLink = document.getElementById('auth-toggle-mode-link');
   const authLogoutBtn = document.getElementById('auth-logout-btn');
+  const securityUsernameGroup = document.getElementById('security-username-group');
   
   if (supabaseClient) {
     // Supabase Mode
     if (authToggleLink) authToggleLink.style.display = 'inline';
     if (authEmailGroup) authEmailGroup.style.display = 'block';
+    if (authUsernameGroup) authUsernameGroup.style.display = 'none';
+    const authUsernameInput = document.getElementById('auth-username');
+    if (authUsernameInput) authUsernameInput.required = false;
     if (authPasswordLabel) authPasswordLabel.innerText = "Password";
+    if (securityUsernameGroup) securityUsernameGroup.style.display = 'none';
     
     setupAuthStateListener();
     
@@ -111,8 +120,12 @@ async function initAuth() {
     // Local Mode
     if (authToggleLink) authToggleLink.style.display = 'none';
     if (authEmailGroup) authEmailGroup.style.display = 'none';
-    if (authPasswordLabel) authPasswordLabel.innerText = "Master Password";
+    if (authUsernameGroup) authUsernameGroup.style.display = 'block';
+    const authUsernameInput = document.getElementById('auth-username');
+    if (authUsernameInput) authUsernameInput.required = true;
+    if (authPasswordLabel) authPasswordLabel.innerText = "Password";
     if (authModeIndicator) authModeIndicator.innerText = "Local Database Lock";
+    if (securityUsernameGroup) securityUsernameGroup.style.display = 'block';
     
     const localSession = sessionStorage.getItem('ws_is_logged_in');
     if (localSession === 'true') {
@@ -221,6 +234,8 @@ async function handleLoginSubmit(e) {
   const errorEl = document.getElementById('auth-error-msg');
   const emailInput = document.getElementById('auth-email');
   const emailVal = emailInput ? emailInput.value.trim() : '';
+  const usernameInput = document.getElementById('auth-username');
+  const usernameVal = usernameInput ? usernameInput.value.trim() : '';
   const passwordVal = document.getElementById('auth-password').value;
   
   if (errorEl) {
@@ -265,8 +280,9 @@ async function handleLoginSubmit(e) {
       }
     }
   } else {
+    const savedUsername = localStorage.getItem('ws_local_username') || 'admin';
     const masterPassword = localStorage.getItem('ws_master_password') || 'admin123';
-    if (passwordVal === masterPassword) {
+    if (usernameVal === savedUsername && passwordVal === masterPassword) {
       sessionStorage.setItem('ws_is_logged_in', 'true');
       state.isLoggedIn = true;
       
@@ -285,7 +301,7 @@ async function handleLoginSubmit(e) {
       shakeCard(authCard);
       if (errorEl) {
         errorEl.style.display = 'block';
-        errorEl.innerText = "Incorrect master password.";
+        errorEl.innerText = "Incorrect username or password.";
       }
     }
   }
@@ -479,6 +495,11 @@ function openSecurityModal() {
   } else {
     const q = localStorage.getItem('ws_security_question');
     if (q && select) select.value = q;
+    
+    const usernameInput = document.getElementById('security-username');
+    if (usernameInput) {
+      usernameInput.value = localStorage.getItem('ws_local_username') || 'admin';
+    }
   }
   
   modal.classList.add('active');
@@ -584,6 +605,15 @@ async function handleSecuritySettingsSubmit(e) {
         errorEl.innerText = "Incorrect current password.";
       }
       return;
+    }
+    
+    // Update local username
+    const usernameInput = document.getElementById('security-username');
+    if (usernameInput) {
+      const newUsername = usernameInput.value.trim();
+      if (newUsername) {
+        localStorage.setItem('ws_local_username', newUsername);
+      }
     }
     
     if (newPass) {
