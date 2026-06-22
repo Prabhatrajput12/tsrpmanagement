@@ -2427,11 +2427,16 @@ a:hover {
   display: none;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.5s ease;
 }
 
 .auth-overlay.active {
   display: flex;
+}
+
+.auth-overlay.unlocking {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .auth-card {
@@ -2446,11 +2451,27 @@ a:hover {
   -webkit-backdrop-filter: blur(10px);
   text-align: left;
   transform: scale(0.95);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease;
 }
 
 .auth-overlay.active .auth-card {
   transform: scale(1);
+}
+
+.auth-overlay.unlocking .auth-card {
+  transform: scale(1.05) translateY(-30px);
+  opacity: 0;
+}
+
+/* Padlock Unlocking Animation */
+#auth-lock-icon.unlocked #lock-shackle {
+  transform: translateY(-6px) rotate(-35deg);
+  transform-origin: 17px 11px;
+  stroke: var(--accent-tertiary);
+}
+
+#auth-lock-icon.unlocked {
+  transform: scale(1.1);
 }
 
 [data-theme="light"] .auth-overlay {

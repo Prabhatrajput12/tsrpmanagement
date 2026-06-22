@@ -157,6 +157,93 @@ function updateAuthDOM() {
   }
 }
 
+function playUnlockSound() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    
+    // 1. The physical "click" sound
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(1500, ctx.currentTime);
+    osc1.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.04);
+    
+    gain1.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.04);
+    
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start();
+    osc1.stop(ctx.currentTime + 0.04);
+    
+    // 2. The warm double-note bell chime (unlock success confirmation)
+    setTimeout(() => {
+      // First chime note (E5)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+      
+      gain2.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start();
+      osc2.stop(ctx.currentTime + 0.35);
+      
+      // Second chime note (A5)
+      setTimeout(() => {
+        const osc3 = ctx.createOscillator();
+        const gain3 = ctx.createGain();
+        osc3.type = 'sine';
+        osc3.frequency.setValueAtTime(880.00, ctx.currentTime); // A5
+        
+        gain3.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain3.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.65);
+        
+        osc3.connect(gain3);
+        gain3.connect(ctx.destination);
+        osc3.start();
+        osc3.stop(ctx.currentTime + 0.65);
+      }, 80);
+    }, 40);
+  } catch (err) {
+    console.error("Failed to play unlock sound:", err);
+  }
+}
+
+function triggerUnlockSequence(onComplete) {
+  // Play sound
+  playUnlockSound();
+  
+  // Swing lock open visually
+  const lockIcon = document.getElementById('auth-lock-icon');
+  if (lockIcon) lockIcon.classList.add('unlocked');
+  
+  // Wait for lock shackle swing animation (400ms)
+  setTimeout(() => {
+    // Fade out overlay
+    const overlay = document.getElementById('auth-overlay');
+    if (overlay) overlay.classList.add('unlocking');
+    
+    // Wait for overlay fade out (500ms)
+    setTimeout(() => {
+      if (overlay) {
+        overlay.classList.remove('active');
+        overlay.classList.remove('unlocking');
+      }
+      if (lockIcon) lockIcon.classList.remove('unlocked');
+      
+      if (typeof onComplete === 'function') {
+        onComplete();
+      }
+    }, 500);
+  }, 400);
+}
+
 function setupAuthStateListener() {
   if (!supabaseClient) return;
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
@@ -167,8 +254,6 @@ function setupAuthStateListener() {
       if (session) {
         state.isLoggedIn = true;
         state.currentUser = session.user;
-        if (authOverlay) authOverlay.classList.remove('active');
-        if (authLogoutBtn) authLogoutBtn.style.display = 'block';
         
         // Hide password recovery/set forms if open
         const newPassForm = document.getElementById('auth-new-password-form');
@@ -178,14 +263,27 @@ function setupAuthStateListener() {
         if (recoveryForm) recoveryForm.style.display = 'none';
         if (loginForm) loginForm.style.display = 'block';
         
-        // Fetch cloud data and setup realtime sync
-        await loadStateFromCloud();
-        setupRealtimeSync();
+        const playAnim = authOverlay && authOverlay.classList.contains('active');
         
-        // Render updated UI
-        populateSelectors();
-        updateGlobalAlerts();
-        renderDashboardCharts();
+        const completeUnlock = async () => {
+          if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+          // Fetch cloud data and setup realtime sync
+          await loadStateFromCloud();
+          setupRealtimeSync();
+          
+          // Render updated UI
+          populateSelectors();
+          updateGlobalAlerts();
+          renderDashboardCharts();
+        };
+        
+        if (playAnim) {
+          triggerUnlockSequence(completeUnlock);
+        } else {
+          if (authOverlay) authOverlay.classList.remove('active');
+          if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+          completeUnlock();
+        }
       }
     } else if (event === 'SIGNED_OUT') {
       state.isLoggedIn = false;
@@ -286,17 +384,16 @@ async function handleLoginSubmit(e) {
       sessionStorage.setItem('ws_is_logged_in', 'true');
       state.isLoggedIn = true;
       
-      const authOverlay = document.getElementById('auth-overlay');
-      if (authOverlay) authOverlay.classList.remove('active');
-      
-      const authLogoutBtn = document.getElementById('auth-logout-btn');
-      if (authLogoutBtn) authLogoutBtn.style.display = 'block';
-      
-      // Load and refresh
-      loadStateFromStorage();
-      populateSelectors();
-      updateGlobalAlerts();
-      renderDashboardCharts();
+      triggerUnlockSequence(() => {
+        const authLogoutBtn = document.getElementById('auth-logout-btn');
+        if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+        
+        // Load and refresh
+        loadStateFromStorage();
+        populateSelectors();
+        updateGlobalAlerts();
+        renderDashboardCharts();
+      });
     } else {
       shakeCard(authCard);
       if (errorEl) {
@@ -403,19 +500,18 @@ async function handleRecoverySubmit(e) {
       sessionStorage.setItem('ws_is_logged_in', 'true');
       state.isLoggedIn = true;
       
-      const authOverlay = document.getElementById('auth-overlay');
-      if (authOverlay) authOverlay.classList.remove('active');
-      
-      const authLogoutBtn = document.getElementById('auth-logout-btn');
-      if (authLogoutBtn) authLogoutBtn.style.display = 'block';
-      
-      alert("Password reset successful! You are now logged in.");
-      
-      // Load and refresh
-      loadStateFromStorage();
-      populateSelectors();
-      updateGlobalAlerts();
-      renderDashboardCharts();
+      triggerUnlockSequence(() => {
+        const authLogoutBtn = document.getElementById('auth-logout-btn');
+        if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+        
+        alert("Password reset successful! You are now logged in.");
+        
+        // Load and refresh
+        loadStateFromStorage();
+        populateSelectors();
+        updateGlobalAlerts();
+        renderDashboardCharts();
+      });
     } else {
       shakeCard(authCard);
       if (errorEl) {
@@ -467,20 +563,7 @@ async function handleNewPasswordSubmit(e) {
     }
   } else {
     alert("Password updated successfully! Welcome back.");
-    const newPassForm = document.getElementById('auth-new-password-form');
-    const loginForm = document.getElementById('auth-login-form');
-    if (newPassForm) newPassForm.style.display = 'none';
-    if (loginForm) loginForm.style.display = 'block';
-    
-    const authOverlay = document.getElementById('auth-overlay');
-    if (authOverlay) authOverlay.classList.remove('active');
-    
-    // Load and refresh
-    await loadStateFromCloud();
-    setupRealtimeSync();
-    populateSelectors();
-    updateGlobalAlerts();
-    renderDashboardCharts();
+    // The onAuthStateChange listener will capture the session update and handle the unlocking transition.
   }
 }
 
