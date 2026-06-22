@@ -287,30 +287,10 @@ function loadStateFromStorage() {
   state.dispatches = JSON.parse(localStorage.getItem('ws_dispatches')) || [];
   state.productionHistory = JSON.parse(localStorage.getItem('ws_production_history')) || [];
 
-  if (state.productionHistory.length === 0) {
-    // Generate mock data for the last 7 days to showcase peaks and downs
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-      
-      // Seed a peak-and-down pattern
-      let qty = 0;
-      if (i === 6) qty = 45;
-      else if (i === 5) qty = 120;
-      else if (i === 4) qty = 35;
-      else if (i === 3) qty = 90;
-      else if (i === 2) qty = 175;
-      else if (i === 1) qty = 50;
-      else if (i === 0) qty = 110;
-
-      state.productionHistory.push({
-        date: dateStr,
-        quantity: qty
-      });
-    }
-    localStorage.setItem('ws_production_history', JSON.stringify(state.productionHistory));
+  // Purge any legacy mock data from the previous version to ensure pure real data
+  if (state.productionHistory.some(h => [45, 120, 35, 90, 175, 50, 110].includes(h.quantity))) {
+    state.productionHistory = [];
+    localStorage.removeItem('ws_production_history');
   }
 
   if (supabaseClient) {
@@ -1059,12 +1039,8 @@ function renderDashboardCharts() {
   // 3. Render Daily Production Output Area/Line SVG Chart
   const prodContainer = document.getElementById('dashboard-production-chart');
   if (prodContainer) {
-    const last7DaysProd = state.productionHistory ? state.productionHistory.slice(-7) : [];
-    if (last7DaysProd.length === 0) {
-      prodContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-style: italic; padding: 40px;">No production records found.</div>`;
-    } else {
-      prodContainer.innerHTML = generateAreaChartSvg(last7DaysProd, '#a855f7', '#a855f7');
-    }
+    const last7DaysProd = getProductionHistoryLast7Days();
+    prodContainer.innerHTML = generateAreaChartSvg(last7DaysProd, '#a855f7', '#a855f7');
   }
 
   // 4. Render Daily Dispatch Output Area/Line SVG Chart
@@ -1073,6 +1049,51 @@ function renderDashboardCharts() {
     const last7DaysDisp = getDispatchHistoryLast7Days();
     dispatchContainer.innerHTML = generateAreaChartSvg(last7DaysDisp, '#3b82f6', '#3b82f6');
   }
+}
+
+// Generate X-axis values for the last 7 days of production (combining saved estimates and manual adjustments)
+function getProductionHistoryLast7Days() {
+  const today = new Date();
+  const history = [];
+  
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    
+    let totalProducedOnDate = 0;
+    
+    // 1. Sum up quantities from saved estimates created/processed on this date
+    if (state.savedEstimates && state.savedEstimates.length > 0) {
+      state.savedEstimates.forEach(est => {
+        if (est.date === dateStr) {
+          if (est.parts && est.parts.length > 0) {
+            est.parts.forEach(part => {
+              totalProducedOnDate += parseFloat(part.quantity) || 0;
+            });
+          } else if (est.items && est.items.length > 0) {
+            totalProducedOnDate += parseFloat(est.quantity) || 1;
+          }
+        }
+      });
+    }
+    
+    // 2. Add manual adjustments logged on this date
+    if (state.productionHistory && state.productionHistory.length > 0) {
+      state.productionHistory.forEach(h => {
+        if (h.date === dateStr) {
+          totalProducedOnDate += parseFloat(h.quantity) || 0;
+        }
+      });
+    }
+    
+    history.push({
+      date: dateStr,
+      quantity: totalProducedOnDate
+    });
+  }
+  
+  return history;
 }
 
 // Generate X-axis values for the last 7 days of dispatches
