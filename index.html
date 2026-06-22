@@ -76,6 +76,11 @@
             <span style="font-size: 1.15rem; margin-right: 4px;">🚚</span> Dispatch
           </button>
         </li>
+        <li class="nav-item" data-tab="ledger">
+          <button type="button">
+            <span style="font-size: 1.15rem; margin-right: 4px;">📊</span> Stock Ledger
+          </button>
+        </li>
         <li class="nav-item" data-tab="reports">
           <button type="button">
             <span style="font-size: 1.15rem; margin-right: 4px;">📄</span> Reports
@@ -400,6 +405,42 @@
 
         <div id="history-list-container" class="history-list">
           <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- 7. STOCK LEDGER TAB PANEL -->
+      <section id="ledger-panel" class="tab-panel">
+        <header class="main-header">
+          <div class="header-title-section">
+            <h1>Finished Parts Stock Ledger</h1>
+            <p>Comprehensive tracking of total parts manufactured, total units dispatched, and current stock remaining.</p>
+          </div>
+          <div class="header-actions no-print">
+            <button id="print-ledger-btn" class="btn btn-primary" onclick="openPrintPreviewForLedger()">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+              Print Ledger Report
+            </button>
+          </div>
+        </header>
+
+        <div class="card" style="padding: 20px;">
+          <table class="print-table" style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+            <thead>
+              <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
+                <th style="padding: 12px 8px; font-weight: 600; color: var(--text-secondary);">Part Name</th>
+                <th style="padding: 12px 8px; font-weight: 600; color: var(--text-secondary); text-align: right;">Total Produced (A)</th>
+                <th style="padding: 12px 8px; font-weight: 600; color: var(--text-secondary); text-align: right;">Total Dispatched (B)</th>
+                <th style="padding: 12px 8px; font-weight: 600; color: var(--text-secondary); text-align: right;">Current Stock Left (A - B)</th>
+                <th style="padding: 12px 8px; font-weight: 600; color: var(--text-secondary); text-align: center; width: 120px;">PO Numbers</th>
+              </tr>
+            </thead>
+            <tbody id="ledger-table-body">
+              <!-- Populated dynamically by JS -->
+            </tbody>
+          </table>
+          <div id="ledger-empty-message" style="display: none; padding: 40px; text-align: center; color: var(--text-muted); font-style: italic;">
+            No parts found in the catalog. Go to the Parts tab to create blueprints first.
+          </div>
         </div>
       </section>
 

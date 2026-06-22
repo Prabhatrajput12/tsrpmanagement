@@ -1956,6 +1956,78 @@ function renderHistoryTab() {
   });
 }
 
+// --- 5a. Finished Goods Stock Ledger ---
+function renderLedgerTab() {
+  const tableBody = document.getElementById('ledger-table-body');
+  const emptyMessage = document.getElementById('ledger-empty-message');
+  const table = document.querySelector('#ledger-panel table');
+  if (!tableBody) return;
+
+  const filteredParts = state.templatesCatalog.filter(tpl => {
+    if (!state.searchQuery) return true;
+    const query = state.searchQuery.toLowerCase();
+    return tpl.name.toLowerCase().includes(query) || 
+           (tpl.poNumber && tpl.poNumber.toLowerCase().includes(query));
+  });
+
+  tableBody.innerHTML = '';
+
+  if (filteredParts.length === 0) {
+    if (table) table.style.display = 'none';
+    if (emptyMessage) {
+      emptyMessage.style.display = 'block';
+      if (state.templatesCatalog.length === 0) {
+        emptyMessage.innerText = 'No parts found in the catalog. Go to the Parts tab to create blueprints first.';
+      } else {
+        emptyMessage.innerText = 'No parts match your search query.';
+      }
+    }
+    return;
+  } else {
+    if (table) table.style.display = 'table';
+    if (emptyMessage) emptyMessage.style.display = 'none';
+  }
+
+  filteredParts.forEach(blueprint => {
+    // Calculate total dispatched across all dispatches
+    let totalDispatched = 0;
+    state.dispatches.forEach(disp => {
+      if (disp.items && Array.isArray(disp.items)) {
+        disp.items.forEach(item => {
+          if (item.id === blueprint.id) {
+            totalDispatched += parseFloat(item.dispatchedQty) || 0;
+          }
+        });
+      }
+    });
+
+    const currentStock = blueprint.stock || 0;
+    const totalProduced = currentStock + totalDispatched;
+    const poNumber = blueprint.poNumber || '-';
+
+    const tr = document.createElement('tr');
+    
+    // Highlight based on stock level
+    let stockStyle = 'padding: 12px 8px; text-align: right;';
+    if (currentStock < 0) {
+      stockStyle += ' color: var(--color-danger); font-weight: 700;';
+    } else if (currentStock === 0) {
+      stockStyle += ' color: var(--text-muted); font-style: italic;';
+    } else {
+      stockStyle += ' color: var(--accent-tertiary); font-weight: 600;';
+    }
+
+    tr.innerHTML = `
+      <td style="padding: 12px 8px; color: var(--text-primary); font-weight: 500;">${blueprint.name}</td>
+      <td style="padding: 12px 8px; text-align: right; color: var(--text-primary); font-weight: 600;">${totalProduced.toLocaleString()}</td>
+      <td style="padding: 12px 8px; text-align: right; color: var(--text-secondary);">${totalDispatched.toLocaleString()}</td>
+      <td style="${stockStyle}">${currentStock.toLocaleString()}</td>
+      <td style="padding: 12px 8px; text-align: center; color: var(--text-muted);">${poNumber}</td>
+    `;
+    tableBody.appendChild(tr);
+  });
+}
+
 // --- 5b. Dispatch & Shipping Tab ---
 function openCreateDispatchModal() {
   const modal = document.getElementById('create-dispatch-modal');
@@ -2769,6 +2841,11 @@ function openPrintPreview(estimateId) {
     </div>
   `;
 
+  const printModalTitle = document.querySelector('#print-modal h3');
+  if (printModalTitle) {
+    printModalTitle.innerText = "Estimate Quote PDF Preview";
+  }
+
   document.getElementById('print-modal').classList.add('active');
 }
 
@@ -2885,6 +2962,115 @@ function openSummaryPrintPreview() {
       </div>
     </div>
   `;
+
+  const printModalTitle = document.querySelector('#print-modal h3');
+  if (printModalTitle) {
+    printModalTitle.innerText = "Quote History PDF Preview";
+  }
+
+  document.getElementById('print-modal').classList.add('active');
+}
+
+function openPrintPreviewForLedger() {
+  const filteredParts = state.templatesCatalog.filter(tpl => {
+    if (!state.searchQuery) return true;
+    const query = state.searchQuery.toLowerCase();
+    return tpl.name.toLowerCase().includes(query) || 
+           (tpl.poNumber && tpl.poNumber.toLowerCase().includes(query));
+  });
+
+  if (filteredParts.length === 0) {
+    alert("No parts found to generate a ledger report.");
+    return;
+  }
+
+  const printArea = document.getElementById('print-area-container');
+  if (!printArea) return;
+  const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  let rowHtml = '';
+  filteredParts.forEach((blueprint, idx) => {
+    // Calculate total dispatched
+    let totalDispatched = 0;
+    state.dispatches.forEach(disp => {
+      if (disp.items && Array.isArray(disp.items)) {
+        disp.items.forEach(item => {
+          if (item.id === blueprint.id) {
+            totalDispatched += parseFloat(item.dispatchedQty) || 0;
+          }
+        });
+      }
+    });
+
+    const currentStock = blueprint.stock || 0;
+    const totalProduced = currentStock + totalDispatched;
+    const poNumber = blueprint.poNumber || '-';
+
+    rowHtml += `
+      <tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td><strong>${blueprint.name}</strong></td>
+        <td style="text-align: right; font-weight: 600;">${totalProduced.toLocaleString()}</td>
+        <td style="text-align: right;">${totalDispatched.toLocaleString()}</td>
+        <td style="text-align: right; font-weight: 600; color: ${currentStock < 0 ? '#ef4444' : currentStock === 0 ? '#64748b' : '#10b981'};">${currentStock.toLocaleString()}</td>
+        <td style="text-align: center;">${poNumber}</td>
+      </tr>
+    `;
+  });
+
+  printArea.innerHTML = `
+    <div class="summary-print-sheet">
+      <div class="print-header">
+        <div class="print-logo-details">
+          <h2>TSRP<br>PLAST</h2>
+          <p>Professional Manufacturing & Engineering Services</p>
+        </div>
+        <div class="print-meta-details">
+          <h3>Finished Stock Ledger Report</h3>
+          <p><strong>Date Generated:</strong> ${dateStr}</p>
+          <p><strong>Time Generated:</strong> ${timeStr}</p>
+        </div>
+      </div>
+
+      <table class="print-table" style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+        <thead>
+          <tr>
+            <th style="width: 8%; text-align: center;">S.No</th>
+            <th style="width: 37%;">Part Name</th>
+            <th style="width: 15%; text-align: right;">Total Produced (A)</th>
+            <th style="width: 15%; text-align: right;">Total Dispatched (B)</th>
+            <th style="width: 15%; text-align: right;">Current Stock (A - B)</th>
+            <th style="width: 10%; text-align: center;">PO Number</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowHtml}
+        </tbody>
+      </table>
+
+      <div class="print-signature-section" style="margin-top: 30px;">
+        <div class="signature-box">
+          <p>Prepared By</p>
+          <span>Store Officer / Operations</span>
+        </div>
+        <div class="signature-box">
+          <p>Authorized By</p>
+          <span>Plant Head / Manager</span>
+        </div>
+      </div>
+
+      <div class="print-footer">
+        <p>This is a system-generated stock ledger report representing finished goods manufactured, dispatched, and balance stock left.</p>
+        <p style="margin-top: 10px; font-weight: 500;">TSRP Plast Administration</p>
+      </div>
+    </div>
+  `;
+
+  const printModalTitle = document.querySelector('#print-modal h3');
+  if (printModalTitle) {
+    printModalTitle.innerText = "Stock Ledger PDF Preview";
+  }
 
   document.getElementById('print-modal').classList.add('active');
 }
@@ -3440,10 +3626,15 @@ function refreshActiveTabContent() {
     case 'inventory':
       renderCatalogMaterials();
       break;
+    case 'dispatch':
+      renderDispatchTab();
+      break;
+    case 'ledger':
+      renderLedgerTab();
+      break;
     case 'reports':
       renderHistoryTab();
       break;
-
   }
 }
 
@@ -3476,6 +3667,8 @@ function switchTab(tabId) {
     renderCatalogMaterials();
   } else if (tabId === 'dispatch') {
     renderDispatchTab();
+  } else if (tabId === 'ledger') {
+    renderLedgerTab();
   } else if (tabId === 'reports') {
     renderHistoryTab();
   }

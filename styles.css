@@ -1819,3 +1819,32 @@ a:hover {
 .highlight-glow {
   animation: highlight-pulse 2s ease-in-out;
 }
+
+/* Stock Ledger styling overrides */
+#ledger-panel .print-table th {
+  background: var(--bg-secondary);
+  border-bottom: 2px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+#ledger-panel .print-table td {
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+#ledger-panel .print-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media print {
+  #ledger-panel .print-table th {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border-bottom: 2px solid #cbd5e1 !important;
+  }
+  #ledger-panel .print-table td {
+    border-bottom: 1px solid #cbd5e1 !important;
+    color: #000000 !important;
+  }
+}
+
