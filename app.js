@@ -1196,8 +1196,8 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
         
         <!-- Floating Tooltip bubble -->
         <g class="chart-tooltip-bubble" style="pointer-events: none; opacity: 0; transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));">
-          <rect x="${(p.x - 45).toFixed(1)}" y="${(p.y - 35).toFixed(1)}" width="90" height="24" rx="5" fill="var(--card-bg)" stroke="${strokeColor}" stroke-width="1.5" />
-          <text x="${p.x.toFixed(1)}" y="${(p.y - 20).toFixed(1)}" fill="var(--text-primary)" font-size="10" font-weight="800" text-anchor="middle">
+          <rect x="${(p.x - 45).toFixed(1)}" y="${(p.y - 35).toFixed(1)}" width="90" height="24" rx="5" fill="var(--bg-card, #ffffff)" stroke="${strokeColor}" stroke-width="1.5" />
+          <text x="${p.x.toFixed(1)}" y="${(p.y - 20).toFixed(1)}" fill="var(--text-primary, #000000)" font-size="10" font-weight="800" text-anchor="middle">
             ${p.quantity} pcs
           </text>
         </g>
@@ -1233,6 +1233,18 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+          .chart-tooltip-bubble rect {
+            fill: #1e1e38 !important;
+          }
+          [data-theme="light"] .chart-tooltip-bubble rect {
+            fill: #ffffff !important;
+          }
+          .chart-tooltip-bubble text {
+            fill: var(--text-primary, #ffffff) !important;
+          }
+          [data-theme="light"] .chart-tooltip-bubble text {
+            fill: var(--text-primary, #000000) !important;
           }
         </style>
       </defs>
