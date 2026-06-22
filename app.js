@@ -218,22 +218,22 @@ function playUnlockSound() {
 function triggerUnlockSequence(onComplete) {
   const overlay = document.getElementById('auth-overlay');
   
-  // Play unlock click/chime sound
+  // Play synthesized unlock chime sound
   playUnlockSound();
   
-  // Transition to centered unlock popup view
+  // Display the centered portal and start ring spin/checkmark draw
   if (overlay) {
     overlay.classList.add('unlocking-active');
   }
   
-  // Wait for lock shackle swing & popup zoom animations to finish (900ms)
+  // Wait for portal checkmark drawing and spin sequence (850ms)
   setTimeout(() => {
-    // Fade out overlay completely
+    // Start circular mask shrink portal reveal animation
     if (overlay) {
       overlay.classList.add('unlocking-complete');
     }
     
-    // Wait for overlay fade out to complete (400ms)
+    // Wait for the 600ms portal reveal shrink animation to finish
     setTimeout(() => {
       if (overlay) {
         overlay.classList.remove('active');
@@ -244,8 +244,8 @@ function triggerUnlockSequence(onComplete) {
       if (typeof onComplete === 'function') {
         onComplete();
       }
-    }, 400);
-  }, 900);
+    }, 600);
+  }, 850);
 }
 
 function setupAuthStateListener() {
