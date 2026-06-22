@@ -4434,6 +4434,63 @@ function switchTab(tabId) {
   }
 }
 
+// Web Audio synthesizer for mic chimes
+let micAudioCtx = null;
+function playMicSound(type) {
+  try {
+    if (!micAudioCtx) {
+      micAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (micAudioCtx.state === 'suspended') {
+      micAudioCtx.resume();
+    }
+    
+    const now = micAudioCtx.currentTime;
+    
+    if (type === 'start') {
+      // Friendly rising chime (C5 -> E5)
+      const osc = micAudioCtx.createOscillator();
+      const gainNode = micAudioCtx.createGain();
+      
+      osc.type = 'sine';
+      osc.connect(gainNode);
+      gainNode.connect(micAudioCtx.destination);
+      
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+      
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.12, now + 0.03);
+      gainNode.gain.setValueAtTime(0.12, now + 0.15);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } else if (type === 'stop') {
+      // Pleasant falling chime (E5 -> C5)
+      const osc = micAudioCtx.createOscillator();
+      const gainNode = micAudioCtx.createGain();
+      
+      osc.type = 'sine';
+      osc.connect(gainNode);
+      gainNode.connect(micAudioCtx.destination);
+      
+      osc.frequency.setValueAtTime(659.25, now); // E5
+      osc.frequency.setValueAtTime(523.25, now + 0.08); // C5
+      
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.12, now + 0.03);
+      gainNode.gain.setValueAtTime(0.12, now + 0.15);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      
+      osc.start(now);
+      osc.stop(now + 0.3);
+    }
+  } catch (e) {
+    console.warn("Audio synthesis failed:", e);
+  }
+}
+
 // Voice Search Web Speech API Integration
 function initVoiceSearch() {
   const voiceBtn = document.getElementById('voice-search-btn');
@@ -4483,6 +4540,9 @@ function initVoiceSearch() {
     voiceStatusText.style.color = "var(--text-primary)";
     voiceTranscriptPreview.innerText = '"Say something..."';
     
+    // Play active chime
+    playMicSound('start');
+    
     try {
       recognition.start();
     } catch (e) {
@@ -4491,8 +4551,13 @@ function initVoiceSearch() {
   }
   
   function closeVoiceModal() {
+    if (!isListening) return;
     isListening = false;
     voiceModal.classList.remove('active');
+    
+    // Play deactive chime
+    playMicSound('stop');
+    
     try {
       recognition.stop();
     } catch (e) {}
