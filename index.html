@@ -635,13 +635,17 @@
       </div>
       <form id="create-dispatch-form">
         <div class="modal-body">
-          <div class="form-group">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label" for="dispatch-product-search">Search Product / Part</label>
+            <input type="text" id="dispatch-product-search" class="form-control" placeholder="Type product name to search..." style="margin: 0; height: 36px; font-size: 0.85rem;">
+          </div>
+          <div class="form-group" style="margin-bottom: 16px;">
             <label class="form-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-              <span>Select Saved Quote(s) / Estimate(s) <span style="color: var(--color-danger);">*</span></span>
-              <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;">Check multiple to aggregate POs</span>
+              <span>Select Product(s) & Link POs <span style="color: var(--color-danger);">*</span></span>
+              <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;">Expand to select matching POs</span>
             </label>
-            <div id="dispatch-estimates-container" style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); border-radius: var(--border-radius-sm); padding: 8px; display: flex; flex-direction: column; gap: 6px;">
-              <!-- Checklist of estimates will be populated dynamically -->
+            <div id="dispatch-products-container" style="max-height: 140px; overflow-y: auto; background: rgba(0,0,0,0.15); border: 1px solid var(--border-color); border-radius: var(--border-radius-sm); padding: 8px; display: flex; flex-direction: column; gap: 8px;">
+              <!-- Checklist of products and nested POs populated dynamically -->
             </div>
           </div>
           

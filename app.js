@@ -2048,7 +2048,8 @@ function renderLedgerTab() {
 // --- 5b. Dispatch & Shipping Tab ---
 function openCreateDispatchModal() {
   const modal = document.getElementById('create-dispatch-modal');
-  const estContainer = document.getElementById('dispatch-estimates-container');
+  const prodContainer = document.getElementById('dispatch-products-container');
+  const searchInput = document.getElementById('dispatch-product-search');
   const clientInput = document.getElementById('dispatch-client-input');
   const partsContainer = document.getElementById('dispatch-parts-list-container');
   const vehicleInput = document.getElementById('dispatch-vehicle-input');
@@ -2057,42 +2058,64 @@ function openCreateDispatchModal() {
   const statusSelect = document.getElementById('dispatch-status-select');
   const remarksInput = document.getElementById('dispatch-remarks-input');
 
-  if (!modal || !estContainer || !partsContainer) return;
+  if (!modal || !prodContainer || !partsContainer) return;
 
   // Clear inputs
+  if (searchInput) searchInput.value = '';
   clientInput.value = '';
   vehicleInput.value = '';
   driverInput.value = '';
-  remarksInput.value = '';
+  if (remarksInput) remarksInput.value = '';
   statusSelect.value = 'Dispatched';
-  partsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">Select one or more saved estimates to configure parts.</span>';
+  partsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">Select one or more products to configure dispatch quantities.</span>';
 
   // Generate unique Gate Pass number
   const randNum = Math.floor(10000 + Math.random() * 90000);
   gatepassInput.value = `CH-${randNum}`;
 
-  // Populate Saved Estimates checklist
-  estContainer.innerHTML = '';
-  if (state.savedEstimates.length === 0) {
-    estContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic; padding: 4px;">No saved estimates found.</span>';
+  // Populate Saved Products list
+  prodContainer.innerHTML = '';
+  if (state.templatesCatalog.length === 0) {
+    prodContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic; padding: 4px;">No products found in the catalog.</span>';
   } else {
-    state.savedEstimates.forEach(est => {
+    state.templatesCatalog.forEach(blueprint => {
       const itemDiv = document.createElement('div');
-      itemDiv.className = 'dispatch-est-checkbox-item';
+      itemDiv.className = 'dispatch-prod-checkbox-item';
       itemDiv.style.display = 'flex';
-      itemDiv.style.alignItems = 'center';
-      itemDiv.style.gap = '8px';
-      itemDiv.style.padding = '4px 6px';
-      itemDiv.style.borderRadius = '4px';
-      itemDiv.style.cursor = 'pointer';
-      
-      itemDiv.innerHTML = `
-        <input type="checkbox" class="dispatch-est-checkbox" value="${est.id}" id="est-chk-${est.id}" style="width: 16px; height: 16px; accent-color: var(--accent-primary); cursor: pointer;">
-        <label for="est-chk-${est.id}" style="font-size: 0.85rem; color: var(--text-primary); cursor: pointer; margin-bottom: 0; flex: 1; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
-          ${est.title} (${est.clientName || 'General Client'} - ${est.date})
+      itemDiv.style.flexDirection = 'column';
+      itemDiv.style.padding = '6px';
+      itemDiv.style.borderRadius = '6px';
+      itemDiv.style.border = '1px solid var(--border-color)';
+      itemDiv.style.background = 'rgba(255,255,255,0.02)';
+      itemDiv.style.marginBottom = '4px';
+
+      const mainRow = document.createElement('div');
+      mainRow.style.display = 'flex';
+      mainRow.style.alignItems = 'center';
+      mainRow.style.gap = '8px';
+      mainRow.style.width = '100%';
+
+      mainRow.innerHTML = `
+        <input type="checkbox" class="dispatch-prod-checkbox" value="${blueprint.id}" id="prod-chk-${blueprint.id}" style="width: 16px; height: 16px; accent-color: var(--accent-primary); cursor: pointer;">
+        <label for="prod-chk-${blueprint.id}" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); cursor: pointer; margin-bottom: 0; flex: 1;">
+          ${blueprint.name} <span style="font-size: 0.75rem; color: var(--accent-tertiary); font-weight: normal; margin-left: 8px;">(Stock: ${blueprint.stock || 0} pcs)</span>
         </label>
       `;
-      estContainer.appendChild(itemDiv);
+
+      itemDiv.appendChild(mainRow);
+
+      // Create inner container for PO list
+      const poListContainer = document.createElement('div');
+      poListContainer.id = `prod-po-list-${blueprint.id}`;
+      poListContainer.className = 'prod-po-list';
+      poListContainer.style.display = 'none';
+      poListContainer.style.paddingLeft = '24px';
+      poListContainer.style.marginTop = '6px';
+      poListContainer.style.flexDirection = 'column';
+      poListContainer.style.gap = '4px';
+
+      itemDiv.appendChild(poListContainer);
+      prodContainer.appendChild(itemDiv);
     });
   }
 
@@ -2104,107 +2127,171 @@ function closeCreateDispatchModal() {
   if (modal) modal.classList.remove('active');
 }
 
-// Handler for when checked estimates change
-function handleDispatchEstimateChange() {
-  const checkedBoxes = document.querySelectorAll('.dispatch-est-checkbox:checked');
-  const clientInput = document.getElementById('dispatch-client-input');
-  const partsContainer = document.getElementById('dispatch-parts-list-container');
+// Function to filter products by search input
+function handleDispatchProductSearch() {
+  const query = document.getElementById('dispatch-product-search').value.toLowerCase().trim();
+  const items = document.querySelectorAll('.dispatch-prod-checkbox-item');
   
-  if (!partsContainer) return;
-
-  if (checkedBoxes.length === 0) {
-    if (clientInput) clientInput.value = '';
-    partsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">Select one or more saved estimates to configure parts.</span>';
-    return;
-  }
-
-  // Get selected estimates
-  const estIds = Array.from(checkedBoxes).map(cb => cb.value);
-  const selectedEstimates = state.savedEstimates.filter(est => estIds.includes(est.id));
-
-  // Auto-populate client name (comma-separated unique names)
-  if (clientInput) {
-    const uniqueClients = [...new Set(selectedEstimates.map(est => est.clientName || 'General Client').filter(Boolean))];
-    clientInput.value = uniqueClients.join(', ');
-  }
-
-  // Populate parts list by aggregating parts of the same name (material)
-  partsContainer.innerHTML = '';
-  const aggregatedParts = {};
-  
-  selectedEstimates.forEach(estimate => {
-    const estParts = [];
-    if (estimate.parts && estimate.parts.length > 0) {
-      estimate.parts.forEach(p => {
-        estParts.push({ id: p.id, name: p.name, quantity: p.quantity, poNumber: p.poNumber || '' });
-      });
+  items.forEach(item => {
+    const label = item.querySelector('label').innerText.toLowerCase();
+    if (label.includes(query)) {
+      item.style.display = 'block';
     } else {
-      const seenParts = {};
-      estimate.items.forEach(it => {
-        const pid = it.partInstanceId || 'other';
-        if (!seenParts[pid]) {
-          const matchingTemplate = state.templatesCatalog.find(t => t.name === it.partName);
-          const defaultPo = matchingTemplate ? (matchingTemplate.poNumber || '') : '';
-          seenParts[pid] = { id: pid, name: it.partName || 'Custom Part', quantity: estimate.quantity || 1, poNumber: defaultPo };
-        }
-      });
-      Object.values(seenParts).forEach(p => estParts.push(p));
+      item.style.display = 'none';
     }
+  });
+}
 
-    estParts.forEach(part => {
-      // Find how many of this part have already been dispatched for this specific estimate
+// Function to render PO list under a checked product
+function renderProductPOList(blueprintId, containerEl) {
+  const blueprint = state.templatesCatalog.find(t => t.id === blueprintId);
+  if (!blueprint) return;
+
+  containerEl.innerHTML = '';
+  
+  // Find all saved estimates containing this blueprint name (case-insensitive)
+  const matchingEstimates = [];
+  
+  state.savedEstimates.forEach(est => {
+    let hasPart = false;
+    let orderedQty = 0;
+    
+    if (est.parts && est.parts.length > 0) {
+      const partObj = est.parts.find(p => p.name.toLowerCase() === blueprint.name.toLowerCase());
+      if (partObj) {
+        hasPart = true;
+        orderedQty = partObj.quantity || 0;
+      }
+    } else {
+      const hasItem = est.items.some(it => it.partName && it.partName.toLowerCase() === blueprint.name.toLowerCase());
+      if (hasItem) {
+        hasPart = true;
+        orderedQty = est.quantity || 1;
+      }
+    }
+    
+    if (hasPart) {
+      // Calculate remaining quantity
       let alreadyDispatched = 0;
       state.dispatches.forEach(disp => {
         if (disp.estimateId) {
           const dispEstIds = disp.estimateId.split(',');
-          if (dispEstIds.includes(estimate.id)) {
-            const dispItem = disp.items.find(it => it.name.toLowerCase() === part.name.toLowerCase());
+          if (dispEstIds.includes(est.id)) {
+            const dispItem = disp.items.find(it => it.name.toLowerCase() === blueprint.name.toLowerCase());
             if (dispItem) {
               alreadyDispatched += parseFloat(dispItem.dispatchedQty) || 0;
             }
           }
         }
       });
-
-      const remainingQty = Math.max(0, part.quantity - alreadyDispatched);
-      const nameKey = part.name.toLowerCase();
-
-      if (!aggregatedParts[nameKey]) {
-        const blueprint = state.templatesCatalog.find(t => t.name.toLowerCase() === nameKey);
-        aggregatedParts[nameKey] = {
-          id: blueprint ? blueprint.id : part.id,
-          name: part.name,
-          totalOrdered: 0,
-          totalRemaining: 0,
-          poNumbers: [],
-          estimateIds: []
-        };
-      }
-
-      aggregatedParts[nameKey].totalOrdered += part.quantity;
-      aggregatedParts[nameKey].totalRemaining += remainingQty;
-      if (!aggregatedParts[nameKey].estimateIds.includes(estimate.id)) {
-        aggregatedParts[nameKey].estimateIds.push(estimate.id);
-      }
-      if (part.poNumber && !aggregatedParts[nameKey].poNumbers.includes(part.poNumber)) {
-        aggregatedParts[nameKey].poNumbers.push(part.poNumber);
-      }
-    });
+      
+      const remainingQty = Math.max(0, orderedQty - alreadyDispatched);
+      
+      matchingEstimates.push({
+        estimate: est,
+        orderedQty: orderedQty,
+        remainingQty: remainingQty,
+        poNumber: est.parts && est.parts[0] ? (est.parts[0].poNumber || '') : (est.poNumber || '')
+      });
+    }
   });
 
-  const partsList = Object.values(aggregatedParts);
-
-  if (partsList.length === 0) {
-    partsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--color-danger);">These estimates contain no parts configuration.</span>';
+  if (matchingEstimates.length === 0) {
+    containerEl.innerHTML = '<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; padding: 4px;">No pending POs found for this product.</span>';
     return;
   }
 
-  partsList.forEach(part => {
-    const remainingQty = part.totalRemaining;
-    const poListStr = part.poNumbers.join(', ');
+  matchingEstimates.forEach(item => {
+    const est = item.estimate;
+    const poDisplay = item.poNumber ? `PO: ${item.poNumber}` : 'No PO';
+    
+    const poDiv = document.createElement('div');
+    poDiv.style.display = 'flex';
+    poDiv.style.alignItems = 'center';
+    poDiv.style.gap = '8px';
+    poDiv.style.padding = '2px 4px';
+    poDiv.innerHTML = `
+      <input type="checkbox" class="dispatch-po-checkbox" 
+             data-blueprint-id="${blueprint.id}" 
+             data-estimate-id="${est.id}" 
+             data-po-number="${item.poNumber || ''}" 
+             data-rem-qty="${item.remainingQty}" 
+             data-ord-qty="${item.orderedQty}"
+             id="po-chk-${blueprint.id}-${est.id}" 
+             style="width: 14px; height: 14px; accent-color: var(--accent-secondary); cursor: pointer;">
+      <label for="po-chk-${blueprint.id}-${est.id}" style="font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; margin-bottom: 0; flex: 1; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+        <strong>${poDisplay}</strong> (${est.title} - ${est.clientName || 'General Client'}) [Ordered: ${item.orderedQty}, Rem: ${item.remainingQty}]
+      </label>
+    `;
+    containerEl.appendChild(poDiv);
+  });
+}
+
+// Handler for when checked products or nested POs change
+function handleDispatchProductOrPOChange() {
+  const checkedProducts = document.querySelectorAll('.dispatch-prod-checkbox:checked');
+  const partsContainer = document.getElementById('dispatch-parts-list-container');
+  const clientInput = document.getElementById('dispatch-client-input');
+  
+  if (!partsContainer) return;
+
+  if (checkedProducts.length === 0) {
+    partsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">Select one or more products to configure dispatch quantities.</span>';
+    if (clientInput) clientInput.value = '';
+    return;
+  }
+
+  partsContainer.innerHTML = '';
+  const clientNames = [];
+
+  checkedProducts.forEach(prodCheckbox => {
+    const blueprintId = prodCheckbox.value;
+    const blueprint = state.templatesCatalog.find(t => t.id === blueprintId);
+    if (!blueprint) return;
+
+    // Find checked POs under this product
+    const poContainer = document.getElementById(`prod-po-list-${blueprint.id}`);
+    const checkedPOs = poContainer ? poContainer.querySelectorAll('.dispatch-po-checkbox:checked') : [];
+
+    let totalOrdered = 0;
+    let totalRemaining = 0;
+    const poNumbers = [];
+    const estimateIds = [];
+
+    if (checkedPOs.length > 0) {
+      checkedPOs.forEach(poCheckbox => {
+        const estId = poCheckbox.getAttribute('data-estimate-id');
+        const poNum = poCheckbox.getAttribute('data-po-number');
+        const remQty = parseFloat(poCheckbox.getAttribute('data-rem-qty')) || 0;
+        const ordQty = parseFloat(poCheckbox.getAttribute('data-ord-qty')) || 0;
+
+        totalOrdered += ordQty;
+        totalRemaining += remQty;
+        estimateIds.push(estId);
+        if (poNum && !poNumbers.includes(poNum)) {
+          poNumbers.push(poNum);
+        }
+
+        const estObj = state.savedEstimates.find(e => e.id === estId);
+        if (estObj && estObj.clientName) {
+          clientNames.push(estObj.clientName);
+        }
+      });
+    } else {
+      totalOrdered = 0;
+      totalRemaining = 0;
+      if (blueprint.poNumber) {
+        poNumbers.push(blueprint.poNumber);
+      }
+    }
+
+    const defaultQty = totalRemaining > 0 ? totalRemaining : 1;
+    const poListStr = poNumbers.join(', ');
 
     const row = document.createElement('div');
     row.className = 'dispatch-part-row';
+    row.setAttribute('data-blueprint-id', blueprint.id);
+    row.setAttribute('data-estimate-ids', estimateIds.join(','));
     row.style.background = 'rgba(255, 255, 255, 0.01)';
     row.style.border = '1px solid var(--border-color)';
     row.style.borderRadius = 'var(--border-radius-sm)';
@@ -2213,47 +2300,55 @@ function handleDispatchEstimateChange() {
     row.style.flexDirection = 'column';
     row.style.gap = '8px';
     row.style.marginBottom = '12px';
+    
     row.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); cursor: pointer; margin-bottom: 0;">
-          <input type="checkbox" class="dispatch-part-checkbox" data-id="${part.id}" checked style="width: 16px; height: 16px; accent-color: var(--accent-primary); cursor: pointer;">
-          <span style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 250px;">${part.name}</span>
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0;">
+          <input type="checkbox" class="dispatch-part-checkbox" data-id="${blueprint.id}" checked style="width: 16px; height: 16px; accent-color: var(--accent-primary); cursor: pointer;">
+          <span style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 250px;">${blueprint.name}</span>
         </label>
-        <span style="font-size: 0.75rem; color: var(--text-secondary);">Ordered: ${part.totalOrdered} (Rem: ${remainingQty})</span>
+        <span style="font-size: 0.75rem; color: var(--text-secondary);">
+          ${checkedPOs.length > 0 ? `Ordered PO Qty: ${totalOrdered} (Rem: ${totalRemaining})` : `Direct Dispatch (Stock: ${blueprint.stock || 0})`}
+        </span>
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
         <div class="form-group" style="margin-bottom: 0;">
           <label style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 2px; display: block;">Qty to Dispatch</label>
-          <input type="number" min="0" step="any" class="form-control dispatch-part-qty-input" data-id="${part.id}" data-name="${part.name}" value="${remainingQty}" style="height: 32px; padding: 4px 8px; font-size: 0.85rem; margin: 0;" required>
+          <input type="number" min="0" step="any" class="form-control dispatch-part-qty-input" data-id="${blueprint.id}" data-name="${blueprint.name}" value="${defaultQty}" style="height: 32px; padding: 4px 8px; font-size: 0.85rem; margin: 0;" required>
         </div>
         <div class="form-group" style="margin-bottom: 0;">
           <label style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 2px; display: block;">Pcs / Box</label>
-          <input type="number" min="1" step="any" class="form-control dispatch-part-pcs-per-box-input" data-id="${part.id}" value="50" style="height: 32px; padding: 4px 8px; font-size: 0.85rem; margin: 0;" required>
+          <input type="number" min="1" step="any" class="form-control dispatch-part-pcs-per-box-input" data-id="${blueprint.id}" value="50" style="height: 32px; padding: 4px 8px; font-size: 0.85rem; margin: 0;" required>
         </div>
         <div class="form-group" style="margin-bottom: 0;">
           <label style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 2px; display: block;">Boxes Required</label>
-          <div class="dispatch-part-calculated-boxes" style="height: 32px; line-height: 32px; font-size: 0.85rem; font-weight: 700; color: var(--accent-primary);">${Math.ceil(remainingQty / 50)} Box${Math.ceil(remainingQty / 50) !== 1 ? 'es' : ''}</div>
+          <div class="dispatch-part-calculated-boxes" style="height: 32px; line-height: 32px; font-size: 0.85rem; font-weight: 700; color: var(--accent-primary);">${Math.ceil(defaultQty / 50)} Box${Math.ceil(defaultQty / 50) !== 1 ? 'es' : ''}</div>
         </div>
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px;">
         <div class="form-group" style="margin-bottom: 0; display: flex; gap: 8px; align-items: center;">
           <label style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap; margin-bottom: 0;">PO Number(s):</label>
-          <input type="text" class="form-control dispatch-part-po-input" data-id="${part.id}" value="${poListStr}" placeholder="e.g. 23451, 23452" style="height: 28px; padding: 2px 8px; font-size: 0.8rem; margin: 0; flex: 1;">
+          <input type="text" class="form-control dispatch-part-po-input" data-id="${blueprint.id}" value="${poListStr}" placeholder="e.g. 23451, 23452" style="height: 28px; padding: 2px 8px; font-size: 0.8rem; margin: 0; flex: 1;">
         </div>
         <div class="form-group" style="margin-bottom: 0; display: flex; gap: 8px; align-items: center;">
           <label style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap; margin-bottom: 0;">Box Dimensions:</label>
-          <input type="text" class="form-control dispatch-part-dims-input" data-id="${part.id}" placeholder="e.g. 12x12x12 in" value="12x12x12 in" style="height: 28px; padding: 2px 8px; font-size: 0.8rem; margin: 0; flex: 1;">
+          <input type="text" class="form-control dispatch-part-dims-input" data-id="${blueprint.id}" placeholder="e.g. 12x12x12 in" value="12x12x12 in" style="height: 28px; padding: 2px 8px; font-size: 0.8rem; margin: 0; flex: 1;">
         </div>
       </div>
     `;
     partsContainer.appendChild(row);
   });
+
+  if (clientInput && clientNames.length > 0) {
+    const uniqueClients = [...new Set(clientNames.filter(Boolean))];
+    clientInput.value = uniqueClients.join(', ');
+  }
 }
 
 function handleCreateDispatchSubmit(e) {
   e.preventDefault();
   
-  const checkedEstBoxes = document.querySelectorAll('.dispatch-est-checkbox:checked');
+  const checkedPOBoxes = document.querySelectorAll('.dispatch-po-checkbox:checked');
   const clientInput = document.getElementById('dispatch-client-input');
   const vehicleInput = document.getElementById('dispatch-vehicle-input');
   const driverInput = document.getElementById('dispatch-driver-input');
@@ -2262,12 +2357,14 @@ function handleCreateDispatchSubmit(e) {
   const remarksInput = document.getElementById('dispatch-remarks-input');
   const qtyInputs = document.querySelectorAll('.dispatch-part-qty-input');
 
-  if (checkedEstBoxes.length === 0) {
-    alert("Please select at least one estimate.");
-    return;
-  }
+  const estIds = [];
+  checkedPOBoxes.forEach(cb => {
+    const estId = cb.getAttribute('data-estimate-id');
+    if (estId && !estIds.includes(estId)) {
+      estIds.push(estId);
+    }
+  });
 
-  const estIds = Array.from(checkedEstBoxes).map(cb => cb.value);
   const selectedEstimates = state.savedEstimates.filter(est => estIds.includes(est.id));
 
   // Compile dispatched items
@@ -2326,18 +2423,18 @@ function handleCreateDispatchSubmit(e) {
   const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-  const clientNameVal = clientInput.value.trim() || selectedEstimates.map(est => est.clientName || 'General Client').filter((v, i, a) => a.indexOf(v) === i).join(', ');
+  const clientNameVal = clientInput.value.trim() || (selectedEstimates.length > 0 ? selectedEstimates.map(est => est.clientName || 'General Client').filter((v, i, a) => a.indexOf(v) === i).join(', ') : 'General Client');
 
   const newDispatch = {
     id: `DSP-${generateId()}`,
-    estimateId: estIds.join(','),
-    estimateTitle: selectedEstimates.map(est => est.title).join(', '),
+    estimateId: estIds.length > 0 ? estIds.join(',') : 'direct',
+    estimateTitle: selectedEstimates.length > 0 ? selectedEstimates.map(est => est.title).join(', ') : 'Direct Stock Dispatch',
     clientName: clientNameVal,
     vehicleNumber: vehicleInput.value.trim(),
     driverName: driverInput.value.trim(),
     gatePass: gatepassInput.value.trim(),
     status: statusSelect.value,
-    remarks: remarksInput.value.trim(),
+    remarks: remarksInput ? remarksInput.value.trim() : '',
     items: dispatchedItems,
     date: dateStr,
     time: timeStr
@@ -4026,13 +4123,35 @@ document.addEventListener('DOMContentLoaded', () => {
     openDispatchBtn.addEventListener('click', openCreateDispatchModal);
   }
 
-  const dispatchEstContainer = document.getElementById('dispatch-estimates-container');
-  if (dispatchEstContainer) {
-    dispatchEstContainer.addEventListener('change', (e) => {
-      if (e.target.classList.contains('dispatch-est-checkbox')) {
-        handleDispatchEstimateChange();
+  const dispatchProdContainer = document.getElementById('dispatch-products-container');
+  if (dispatchProdContainer) {
+    dispatchProdContainer.addEventListener('change', (e) => {
+      if (e.target.classList.contains('dispatch-prod-checkbox')) {
+        const prodCheckbox = e.target;
+        const blueprintId = prodCheckbox.value;
+        const poContainer = document.getElementById(`prod-po-list-${blueprintId}`);
+        
+        if (prodCheckbox.checked) {
+          if (poContainer) {
+            poContainer.style.display = 'flex';
+            renderProductPOList(blueprintId, poContainer);
+          }
+        } else {
+          if (poContainer) {
+            poContainer.style.display = 'none';
+            poContainer.innerHTML = '';
+          }
+        }
+        handleDispatchProductOrPOChange();
+      } else if (e.target.classList.contains('dispatch-po-checkbox')) {
+        handleDispatchProductOrPOChange();
       }
     });
+  }
+
+  const dispatchProductSearch = document.getElementById('dispatch-product-search');
+  if (dispatchProductSearch) {
+    dispatchProductSearch.addEventListener('input', handleDispatchProductSearch);
   }
 
   const createDispatchForm = document.getElementById('create-dispatch-form');
