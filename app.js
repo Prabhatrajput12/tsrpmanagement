@@ -4434,11 +4434,68 @@ function switchTab(tabId) {
   }
 }
 
+// Voice Search Web Speech API Integration
+function initVoiceSearch() {
+  const voiceBtn = document.getElementById('voice-search-btn');
+  const searchInput = document.getElementById('module-search');
+  
+  if (!voiceBtn || !searchInput) return;
+  
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    voiceBtn.style.display = 'none'; // hide if not supported by browser
+    return;
+  }
+  
+  const recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  
+  voiceBtn.addEventListener('click', () => {
+    if (voiceBtn.classList.contains('listening')) {
+      recognition.stop();
+    } else {
+      recognition.start();
+    }
+  });
+  
+  recognition.onstart = () => {
+    voiceBtn.classList.add('listening');
+    voiceBtn.title = "Listening... Speak now";
+    searchInput.placeholder = "Listening...";
+  };
+  
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    const cleanedText = transcript.trim().replace(/\.$/, '');
+    searchInput.value = cleanedText;
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  
+  recognition.onerror = (event) => {
+    console.error("Speech recognition error:", event.error);
+    stopListening();
+  };
+  
+  recognition.onend = () => {
+    stopListening();
+  };
+  
+  function stopListening() {
+    voiceBtn.classList.remove('listening');
+    voiceBtn.title = "Voice Search";
+    searchInput.placeholder = "Search database...";
+  }
+}
+
 // --- Core Event Listeners & Bootstrapping ---
 document.addEventListener('DOMContentLoaded', () => {
   loadStateFromStorage();
   populateSelectors();
   updateGlobalAlerts();
+  initVoiceSearch();
   
   // Initial load
   renderDashboardCharts();
