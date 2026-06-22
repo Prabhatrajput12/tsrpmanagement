@@ -3363,12 +3363,22 @@ function bookOrderAndDeductStock() {
     }
   });
 
-  // Increment finished stock of the blueprint/part being manufactured
-  const templateId = state.activeEstimate.templateId;
-  if (templateId) {
-    const blueprint = state.templatesCatalog.find(t => t.id === templateId);
-    if (blueprint) {
-      blueprint.stock = (blueprint.stock || 0) + (state.activeEstimate.quantity || 1);
+  // Increment finished stock of the blueprints/parts being manufactured
+  if (state.activeEstimate.parts && state.activeEstimate.parts.length > 0) {
+    state.activeEstimate.parts.forEach(part => {
+      const blueprint = state.templatesCatalog.find(t => t.name === part.name);
+      if (blueprint) {
+        blueprint.stock = (blueprint.stock || 0) + (part.quantity || 0);
+      }
+    });
+  } else {
+    // Fallback to legacy behavior
+    const templateId = state.activeEstimate.templateId;
+    if (templateId) {
+      const blueprint = state.templatesCatalog.find(t => t.id === templateId);
+      if (blueprint) {
+        blueprint.stock = (blueprint.stock || 0) + (state.activeEstimate.quantity || 1);
+      }
     }
   }
 
