@@ -145,6 +145,19 @@ async function syncAllToCloud() {
     } else {
       await supabaseClient.from('dispatches').delete().neq('id', '');
     }
+
+    // 5. Sync Production History
+    if (state.productionHistory.length > 0) {
+      const records = state.productionHistory.map(h => ({
+        date: h.date,
+        quantity: h.quantity || 0
+      }));
+      await supabaseClient.from('production_history').upsert(records);
+      const dates = state.productionHistory.map(x => x.date);
+      await supabaseClient.from('production_history').delete().not('date', 'in', `(${dates.join(',')})`);
+    } else {
+      await supabaseClient.from('production_history').delete().neq('date', '');
+    }
   } catch (err) {
     console.error("Failed to sync to cloud:", err);
   } finally {
@@ -165,17 +178,19 @@ function debouncedLoadStateFromCloud() {
 async function loadStateFromCloud() {
   if (!supabaseClient) return;
   try {
-    const [matsRes, tplsRes, estsRes, dispsRes] = await Promise.all([
+    const [matsRes, tplsRes, estsRes, dispsRes, prodRes] = await Promise.all([
       supabaseClient.from('raw_materials').select('*'),
       supabaseClient.from('blueprints').select('*'),
       supabaseClient.from('estimates').select('*'),
-      supabaseClient.from('dispatches').select('*')
+      supabaseClient.from('dispatches').select('*'),
+      supabaseClient.from('production_history').select('*')
     ]);
 
     if (matsRes.error) throw matsRes.error;
     if (tplsRes.error) throw tplsRes.error;
     if (estsRes.error) throw estsRes.error;
     if (dispsRes.error) throw dispsRes.error;
+    if (prodRes.error) throw prodRes.error;
 
     if (matsRes.data) {
       state.materialsCatalog = matsRes.data.map(m => ({
@@ -240,11 +255,19 @@ async function loadStateFromCloud() {
       }));
     }
 
+    if (prodRes.data) {
+      state.productionHistory = prodRes.data.map(h => ({
+        date: h.date,
+        quantity: parseFloat(h.quantity) || 0
+      }));
+    }
+
     // Update local storage cache
     localStorage.setItem('ws_materials', JSON.stringify(state.materialsCatalog));
     localStorage.setItem('ws_templates', JSON.stringify(state.templatesCatalog));
     localStorage.setItem('ws_estimates', JSON.stringify(state.savedEstimates));
     localStorage.setItem('ws_dispatches', JSON.stringify(state.dispatches));
+    localStorage.setItem('ws_production_history', JSON.stringify(state.productionHistory));
 
     // Refresh active views
     const activeTab = state.activeTab || 'dashboard';

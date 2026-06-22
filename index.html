@@ -963,17 +963,26 @@ create table if not exists public.dispatches (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- 5. Enable row level security (RLS)
+-- 5. Create production_history table
+create table if not exists public.production_history (
+  date text primary key,
+  quantity numeric not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 6. Enable row level security (RLS)
 alter table public.raw_materials enable row level security;
 alter table public.blueprints enable row level security;
 alter table public.estimates enable row level security;
 alter table public.dispatches enable row level security;
+alter table public.production_history enable row level security;
 
--- 6. Create policies for public access (anon) for read/write
+-- 7. Create policies for public access (anon) for read/write
 create policy "Allow all users to manage raw_materials" on public.raw_materials for all using (true) with check (true);
 create policy "Allow all users to manage blueprints" on public.blueprints for all using (true) with check (true);
 create policy "Allow all users to manage estimates" on public.estimates for all using (true) with check (true);
 create policy "Allow all users to manage dispatches" on public.dispatches for all using (true) with check (true);
+create policy "Allow all users to manage production_history" on public.production_history for all using (true) with check (true);
           </textarea>
         </div>
       </div>
