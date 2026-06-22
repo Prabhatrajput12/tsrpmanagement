@@ -1069,7 +1069,7 @@ function getProductionHistoryLast7Days() {
         if (est.date === dateStr) {
           if (est.parts && est.parts.length > 0) {
             est.parts.forEach(part => {
-              totalProducedOnDate += parseFloat(part.quantity) || 0;
+              totalProducedOnDate += (parseFloat(part.quantity) || 1) * (parseFloat(est.quantity) || 1);
             });
           } else if (est.items && est.items.length > 0) {
             totalProducedOnDate += parseFloat(est.quantity) || 1;
@@ -3792,10 +3792,11 @@ function bookOrderAndDeductStock() {
   if (state.activeEstimate.parts && state.activeEstimate.parts.length > 0) {
     state.activeEstimate.parts.forEach(part => {
       const blueprint = state.templatesCatalog.find(t => t.name === part.name);
+      const producedQtyForThisPart = (part.quantity || 1) * (state.activeEstimate.quantity || 1);
       if (blueprint) {
-        blueprint.stock = (blueprint.stock || 0) + (part.quantity || 0);
+        blueprint.stock = (blueprint.stock || 0) + producedQtyForThisPart;
       }
-      totalQtyProduced += (part.quantity || 0);
+      totalQtyProduced += producedQtyForThisPart;
     });
   } else {
     // Fallback to legacy behavior
