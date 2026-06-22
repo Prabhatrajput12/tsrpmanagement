@@ -35,7 +35,8 @@ const state = {
   editingBlueprintId: null,
   editingMaterialId: null,
   activeMaterialFilter: 'all',
-  dispatches: []
+  dispatches: [],
+  productionHistory: []
 };
 
 // --- Supabase Cloud Client Setup ---
@@ -284,6 +285,33 @@ function loadStateFromStorage() {
   state.templatesCatalog = JSON.parse(localStorage.getItem('ws_templates')) || DEFAULT_TEMPLATES;
   state.savedEstimates = JSON.parse(localStorage.getItem('ws_estimates')) || [];
   state.dispatches = JSON.parse(localStorage.getItem('ws_dispatches')) || [];
+  state.productionHistory = JSON.parse(localStorage.getItem('ws_production_history')) || [];
+
+  if (state.productionHistory.length === 0) {
+    // Generate mock data for the last 7 days to showcase peaks and downs
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      
+      // Seed a peak-and-down pattern
+      let qty = 0;
+      if (i === 6) qty = 45;
+      else if (i === 5) qty = 120;
+      else if (i === 4) qty = 35;
+      else if (i === 3) qty = 90;
+      else if (i === 2) qty = 175;
+      else if (i === 1) qty = 50;
+      else if (i === 0) qty = 110;
+
+      state.productionHistory.push({
+        date: dateStr,
+        quantity: qty
+      });
+    }
+    localStorage.setItem('ws_production_history', JSON.stringify(state.productionHistory));
+  }
 
   if (supabaseClient) {
     loadStateFromCloud();
@@ -297,6 +325,7 @@ function saveStateToStorage() {
   localStorage.setItem('ws_templates', JSON.stringify(state.templatesCatalog));
   localStorage.setItem('ws_estimates', JSON.stringify(state.savedEstimates));
   localStorage.setItem('ws_dispatches', JSON.stringify(state.dispatches));
+  localStorage.setItem('ws_production_history', JSON.stringify(state.productionHistory));
   if (supabaseClient) {
     syncAllToCloud();
   }
@@ -1026,6 +1055,164 @@ function renderDashboardCharts() {
     });
     stockContainer.innerHTML = `<div style="display: flex; flex-direction: column; gap: 4px; padding: 10px 0;">${barsHtml}</div>`;
   }
+
+  // 3. Render Daily Production Output Area/Line SVG Chart
+  const prodContainer = document.getElementById('dashboard-production-chart');
+  if (prodContainer) {
+    const last7DaysProd = state.productionHistory ? state.productionHistory.slice(-7) : [];
+    if (last7DaysProd.length === 0) {
+      prodContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-style: italic; padding: 40px;">No production records found.</div>`;
+    } else {
+      prodContainer.innerHTML = generateAreaChartSvg(last7DaysProd, '#a855f7', '#a855f7');
+    }
+  }
+
+  // 4. Render Daily Dispatch Output Area/Line SVG Chart
+  const dispatchContainer = document.getElementById('dashboard-dispatch-chart');
+  if (dispatchContainer) {
+    const last7DaysDisp = getDispatchHistoryLast7Days();
+    dispatchContainer.innerHTML = generateAreaChartSvg(last7DaysDisp, '#3b82f6', '#3b82f6');
+  }
+}
+
+// Generate X-axis values for the last 7 days of dispatches
+function getDispatchHistoryLast7Days() {
+  const today = new Date();
+  const history = [];
+  
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    
+    let totalDispatchedOnDate = 0;
+    if (state.dispatches && state.dispatches.length > 0) {
+      state.dispatches.forEach(disp => {
+        if (disp.date === dateStr) {
+          if (disp.items && disp.items.length > 0) {
+            disp.items.forEach(item => {
+              totalDispatchedOnDate += parseFloat(item.dispatchedQty) || 0;
+            });
+          }
+        }
+      });
+    }
+    
+    history.push({
+      date: dateStr,
+      quantity: totalDispatchedOnDate
+    });
+  }
+  
+  return history;
+}
+
+// Helper to draw a beautiful SVG area chart
+function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f7') {
+  const width = 500;
+  const height = 200;
+  const paddingLeft = 40;
+  const paddingRight = 20;
+  const paddingTop = 25;
+  const paddingBottom = 30;
+  
+  const plotWidth = width - paddingLeft - paddingRight;
+  const plotHeight = height - paddingTop - paddingBottom;
+  
+  const quantities = data.map(d => d.quantity || 0);
+  const maxQty = Math.max(...quantities, 10);
+  const maxAxisVal = Math.ceil(maxQty * 1.15 / 10) * 10;
+  
+  const points = data.map((d, i) => {
+    const x = paddingLeft + i * (plotWidth / (data.length - 1 || 1));
+    const y = (height - paddingBottom) - ((d.quantity || 0) / maxAxisVal) * plotHeight;
+    return { x, y, date: d.date, quantity: d.quantity || 0 };
+  });
+  
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const areaPath = points.length > 0 
+    ? `${linePath} L ${points[points.length - 1].x.toFixed(1)} ${(height - paddingBottom).toFixed(1)} L ${points[0].x.toFixed(1)} ${(height - paddingBottom).toFixed(1)} Z`
+    : '';
+
+  let gridLines = '';
+  const divisions = 4;
+  for (let i = 0; i <= divisions; i++) {
+    const yVal = (height - paddingBottom) - (i / divisions) * plotHeight;
+    const qtyVal = Math.round((i / divisions) * maxAxisVal);
+    gridLines += `
+      <line x1="${paddingLeft}" y1="${yVal}" x2="${width - paddingRight}" y2="${yVal}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,3" />
+      <text x="${paddingLeft - 8}" y="${yVal + 4}" fill="var(--text-secondary)" font-size="9" text-anchor="end">${qtyVal}</text>
+    `;
+  }
+
+  let xLabels = '';
+  points.forEach((p) => {
+    const dateParts = p.date.split(',')[0].trim().split(' ');
+    const displayDate = dateParts.length >= 2 ? `${dateParts[0]} ${dateParts[1]}` : p.date;
+    xLabels += `
+      <text x="${p.x}" y="${height - 10}" fill="var(--text-secondary)" font-size="9" text-anchor="middle">${displayDate}</text>
+    `;
+  });
+
+  let dots = '';
+  const gradId = `chart-area-grad-${strokeColor.replace('#', '')}`;
+  points.forEach((p) => {
+    dots += `
+      <g class="chart-dot-group" style="cursor: pointer;">
+        <circle cx="${p.x}" cy="${p.y}" r="4" fill="#ffffff" stroke="${strokeColor}" stroke-width="2.5" />
+        <g class="chart-tooltip-bubble" style="pointer-events: none; opacity: 0; transition: opacity 0.2s;">
+          <rect x="${p.x - 45}" y="${p.y - 32}" width="90" height="22" rx="4" fill="var(--card-bg)" stroke="${strokeColor}" stroke-width="1" />
+          <text x="${p.x}" y="${p.y - 18}" fill="var(--text-primary)" font-size="9.5" font-weight="bold" text-anchor="middle">
+            ${p.quantity} pcs
+          </text>
+        </g>
+        <circle cx="${p.x}" cy="${p.y}" r="12" fill="transparent" />
+      </g>
+    `;
+  });
+
+  return `
+    <svg viewBox="0 0 ${width} ${height}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="overflow: visible;">
+      <defs>
+        <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${fillColor}" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="${fillColor}" stop-opacity="0.0"/>
+        </linearGradient>
+        <style>
+          .chart-dot-group {
+            pointer-events: all;
+          }
+          .chart-dot-group:hover .chart-tooltip-bubble {
+            opacity: 1 !important;
+          }
+          .chart-dot-group:hover circle:first-child {
+            r: 6px !important;
+            stroke-width: 3.5px !important;
+          }
+          .chart-tooltip-bubble {
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+          }
+        </style>
+      </defs>
+      
+      <!-- Grid Lines -->
+      ${gridLines}
+      
+      <!-- Area Fill -->
+      ${areaPath ? `<path d="${areaPath}" fill="url(#${gradId})" />` : ''}
+      
+      <!-- Line Path -->
+      ${linePath ? `<path d="${linePath}" fill="none" stroke="${strokeColor}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />` : ''}
+      
+      <!-- X Labels -->
+      ${xLabels}
+      
+      <!-- Dots -->
+      ${dots}
+    </svg>
+  `;
 }
 
 // --- 2. Parts Tab Blueprint Builder ---
@@ -1146,6 +1333,21 @@ function renderPartsTab() {
 
       if (action === 'add') {
         blueprint.stock = (blueprint.stock || 0) + amt;
+        
+        // Log to daily production history
+        const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        let todayEntry = state.productionHistory.find(h => h.date === todayStr);
+        if (todayEntry) {
+          todayEntry.quantity = (todayEntry.quantity || 0) + amt;
+        } else {
+          state.productionHistory.push({
+            date: todayStr,
+            quantity: amt
+          });
+          if (state.productionHistory.length > 30) {
+            state.productionHistory.shift();
+          }
+        }
       } else {
         blueprint.stock = Math.max(0, (blueprint.stock || 0) - amt);
       }
@@ -3565,12 +3767,14 @@ function bookOrderAndDeductStock() {
   });
 
   // Increment finished stock of the blueprints/parts being manufactured
+  let totalQtyProduced = 0;
   if (state.activeEstimate.parts && state.activeEstimate.parts.length > 0) {
     state.activeEstimate.parts.forEach(part => {
       const blueprint = state.templatesCatalog.find(t => t.name === part.name);
       if (blueprint) {
         blueprint.stock = (blueprint.stock || 0) + (part.quantity || 0);
       }
+      totalQtyProduced += (part.quantity || 0);
     });
   } else {
     // Fallback to legacy behavior
@@ -3579,6 +3783,24 @@ function bookOrderAndDeductStock() {
       const blueprint = state.templatesCatalog.find(t => t.id === templateId);
       if (blueprint) {
         blueprint.stock = (blueprint.stock || 0) + (state.activeEstimate.quantity || 1);
+      }
+    }
+    totalQtyProduced += (state.activeEstimate.quantity || 1);
+  }
+
+  // Log to daily production history
+  if (totalQtyProduced > 0) {
+    const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    let todayEntry = state.productionHistory.find(h => h.date === todayStr);
+    if (todayEntry) {
+      todayEntry.quantity = (todayEntry.quantity || 0) + totalQtyProduced;
+    } else {
+      state.productionHistory.push({
+        date: todayStr,
+        quantity: totalQtyProduced
+      });
+      if (state.productionHistory.length > 30) {
+        state.productionHistory.shift();
       }
     }
   }
