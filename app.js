@@ -2024,7 +2024,10 @@ function handleDispatchEstimateChange(e) {
     row.style.marginBottom = '12px';
     row.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <strong style="font-size: 0.85rem; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${part.name}</strong>
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); cursor: pointer; margin-bottom: 0;">
+          <input type="checkbox" class="dispatch-part-checkbox" data-id="${part.id}" checked style="width: 16px; height: 16px; accent-color: var(--accent-primary); cursor: pointer;">
+          <span style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 250px;">${part.name}</span>
+        </label>
         <span style="font-size: 0.75rem; color: var(--text-secondary);">Ordered: ${part.quantity} (Rem: ${remainingQty})</span>
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
@@ -2072,10 +2075,13 @@ function handleCreateDispatchSubmit(e) {
   // Compile dispatched items
   const dispatchedItems = [];
   qtyInputs.forEach(input => {
+    const row = input.closest('.dispatch-part-row');
+    const checkbox = row.querySelector('.dispatch-part-checkbox');
+    if (checkbox && !checkbox.checked) return; // Skip if unchecked
+
     const qty = parseFloat(input.value) || 0;
     if (qty > 0) {
       const partId = input.getAttribute('data-id');
-      const row = input.closest('.dispatch-part-row');
       const pcsInput = row.querySelector('.dispatch-part-pcs-per-box-input');
       const dimsInput = row.querySelector('.dispatch-part-dims-input');
       
@@ -2095,7 +2101,7 @@ function handleCreateDispatchSubmit(e) {
   });
 
   if (dispatchedItems.length === 0) {
-    alert("Please specify a dispatch quantity greater than 0 for at least one part.");
+    alert("Please select at least one part to dispatch and enter a quantity greater than 0.");
     return;
   }
 
@@ -3620,6 +3626,44 @@ document.addEventListener('DOMContentLoaded', () => {
           const qty = parseFloat(qtyInput.value) || 0;
           const pcs = parseFloat(pcsInput.value) || 1;
           
+          const boxes = Math.ceil(qty / pcs);
+          calcDiv.innerText = `${boxes} Box${boxes !== 1 ? 'es' : ''}`;
+        }
+      }
+    });
+
+    // Checkbox change listener to enable/disable other inputs dynamically
+    partsContainer.addEventListener('change', (e) => {
+      if (e.target.classList.contains('dispatch-part-checkbox')) {
+        const row = e.target.closest('.dispatch-part-row');
+        if (row) {
+          const checked = e.target.checked;
+          const qtyInput = row.querySelector('.dispatch-part-qty-input');
+          const pcsInput = row.querySelector('.dispatch-part-pcs-per-box-input');
+          const dimsInput = row.querySelector('.dispatch-part-dims-input');
+          const calcDiv = row.querySelector('.dispatch-part-calculated-boxes');
+          
+          if (checked) {
+            qtyInput.removeAttribute('disabled');
+            pcsInput.removeAttribute('disabled');
+            dimsInput.removeAttribute('disabled');
+            qtyInput.value = qtyInput.getAttribute('data-default-val') || qtyInput.max;
+            qtyInput.style.opacity = '1';
+            pcsInput.style.opacity = '1';
+            dimsInput.style.opacity = '1';
+          } else {
+            qtyInput.setAttribute('disabled', 'true');
+            pcsInput.setAttribute('disabled', 'true');
+            dimsInput.setAttribute('disabled', 'true');
+            qtyInput.setAttribute('data-default-val', qtyInput.value);
+            qtyInput.value = 0;
+            qtyInput.style.opacity = '0.5';
+            pcsInput.style.opacity = '0.5';
+            dimsInput.style.opacity = '0.5';
+          }
+          
+          const qty = parseFloat(qtyInput.value) || 0;
+          const pcs = parseFloat(pcsInput.value) || 1;
           const boxes = Math.ceil(qty / pcs);
           calcDiv.innerText = `${boxes} Box${boxes !== 1 ? 'es' : ''}`;
         }
