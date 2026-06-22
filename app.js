@@ -216,32 +216,36 @@ function playUnlockSound() {
 }
 
 function triggerUnlockSequence(onComplete) {
-  // Play sound
+  const overlay = document.getElementById('auth-overlay');
+  
+  // Play unlock click/chime sound
   playUnlockSound();
   
-  // Swing lock open visually
-  const lockIcon = document.getElementById('auth-lock-icon');
-  if (lockIcon) lockIcon.classList.add('unlocked');
+  // Transition to centered unlock popup view
+  if (overlay) {
+    overlay.classList.add('unlocking-active');
+  }
   
-  // Wait for lock shackle swing animation (400ms)
+  // Wait for lock shackle swing & popup zoom animations to finish (900ms)
   setTimeout(() => {
-    // Fade out overlay
-    const overlay = document.getElementById('auth-overlay');
-    if (overlay) overlay.classList.add('unlocking');
+    // Fade out overlay completely
+    if (overlay) {
+      overlay.classList.add('unlocking-complete');
+    }
     
-    // Wait for overlay fade out (500ms)
+    // Wait for overlay fade out to complete (400ms)
     setTimeout(() => {
       if (overlay) {
         overlay.classList.remove('active');
-        overlay.classList.remove('unlocking');
+        overlay.classList.remove('unlocking-active');
+        overlay.classList.remove('unlocking-complete');
       }
-      if (lockIcon) lockIcon.classList.remove('unlocked');
       
       if (typeof onComplete === 'function') {
         onComplete();
       }
-    }, 500);
-  }, 400);
+    }, 400);
+  }, 900);
 }
 
 function setupAuthStateListener() {

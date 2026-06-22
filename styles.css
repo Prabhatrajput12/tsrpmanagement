@@ -2434,11 +2434,6 @@ a:hover {
   display: flex;
 }
 
-.auth-overlay.unlocking {
-  opacity: 0;
-  pointer-events: none;
-}
-
 .auth-card {
   background: rgba(20, 24, 45, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2458,20 +2453,101 @@ a:hover {
   transform: scale(1);
 }
 
-.auth-overlay.unlocking .auth-card {
-  transform: scale(1.05) translateY(-30px);
-  opacity: 0;
+/* Centered Unlock Popup */
+.unlock-popup {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2100;
 }
 
-/* Padlock Unlocking Animation */
-#auth-lock-icon.unlocked #lock-shackle {
-  transform: translateY(-6px) rotate(-35deg);
-  transform-origin: 17px 11px;
+.unlock-popup-card {
+  background: rgba(20, 24, 45, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--border-radius-lg);
+  padding: 32px;
+  text-align: center;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 180px;
+  height: 180px;
+  justify-content: center;
+  transform: scale(0.8);
+  opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+}
+
+[data-theme="light"] .unlock-popup-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15);
+}
+
+.unlock-popup-card svg {
+  width: 64px;
+  height: 64px;
   stroke: var(--accent-tertiary);
 }
 
-#auth-lock-icon.unlocked {
+.unlock-popup-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: transform 0.4s ease, opacity 0.4s ease;
+}
+
+/* Animation states during unlocking process */
+.auth-overlay.unlocking-active .auth-card {
+  transform: scale(0.9) translateY(-15px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.auth-overlay.unlocking-active .unlock-popup {
+  display: flex;
+}
+
+.auth-overlay.unlocking-active .unlock-popup-card {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.auth-overlay.unlocking-active .unlock-popup-card svg #lock-shackle-popup {
+  transform: translateY(-8px) rotate(-35deg);
+  transform-origin: 17px 11px;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.auth-overlay.unlocking-active .unlock-popup-text {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.1s;
+}
+
+.auth-overlay.unlocking-complete {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.auth-overlay.unlocking-complete .unlock-popup-card {
   transform: scale(1.1);
+  opacity: 0;
+  transition: transform 0.4s ease, opacity 0.4s ease;
 }
 
 [data-theme="light"] .auth-overlay {
