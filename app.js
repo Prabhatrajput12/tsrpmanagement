@@ -993,13 +993,23 @@ function renderDashboardCharts() {
   }
 
   const lowStockEl = document.getElementById('kpi-low-stock-count');
-  if (lowStockEl) lowStockEl.innerText = lowStockCount;
+  if (lowStockEl) {
+    const currentVal = parseInt(lowStockEl.innerText) || 0;
+    animateValue('kpi-low-stock-count', currentVal, lowStockCount, 800);
+  }
 
   const savedQuotesEl = document.getElementById('kpi-saved-quotes-count');
-  if (savedQuotesEl) savedQuotesEl.innerText = state.savedEstimates.length;
+  if (savedQuotesEl) {
+    const currentVal = parseInt(savedQuotesEl.innerText) || 0;
+    animateValue('kpi-saved-quotes-count', currentVal, state.savedEstimates.length, 800);
+  }
 
   const dispatchesEl = document.getElementById('kpi-dispatches-count');
-  if (dispatchesEl) dispatchesEl.innerText = state.dispatches ? state.dispatches.length : 0;
+  if (dispatchesEl) {
+    const currentVal = parseInt(dispatchesEl.innerText) || 0;
+    const targetVal = state.dispatches ? state.dispatches.length : 0;
+    animateValue('kpi-dispatches-count', currentVal, targetVal, 800);
+  }
 
   // 2. Render Stock level bar charts (Dynamic - real data)
   if (filteredMaterials.length === 0) {
@@ -1263,6 +1273,32 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
       ${columnsHtml}
     </svg>
   `;
+}
+
+
+// Helper to animate integer values (e.g. counting up KPI cards)
+function animateValue(id, start, end, duration) {
+  const obj = document.getElementById(id);
+  if (!obj) return;
+  if (start === end) {
+    obj.innerText = end;
+    return;
+  }
+  
+  let startTimestamp = null;
+  const step = (timestamp) => {
+    if (!startTimestamp) startTimestamp = timestamp;
+    const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+    const easeProgress = progress * (2 - progress); // easeOutQuad
+    const current = Math.floor(easeProgress * (end - start) + start);
+    obj.innerText = current;
+    if (progress < 1) {
+      window.requestAnimationFrame(step);
+    } else {
+      obj.innerText = end;
+    }
+  };
+  window.requestAnimationFrame(step);
 }
 
 // Helper to draw a beautiful SVG horizontal bar chart for stock levels (using Logarithmic scaling to balance large/small outliers)
