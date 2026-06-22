@@ -279,20 +279,32 @@
             
             <!-- Slide 2: Daily Parts Production Output -->
             <div class="card dashboard-chart-card prod-chart chart-slide-card" id="slide-production-card">
-              <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <span>Daily Parts Production Output</span>
-                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Total parts manufactured per day (last 7 days)</span>
+              <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                  <span>Daily Parts Production Output</span>
+                  <span id="production-chart-subtitle" style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Total parts manufactured per day (last 7 days)</span>
+                </div>
+                <select id="production-timeframe-select" class="sidebar-search-input" style="width: auto; padding: 4px 8px; font-size: 0.75rem; margin: 0; background: var(--bg-card, #1e1e38); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); height: 28px; border-radius: 6px; cursor: pointer; color: var(--text-primary); font-weight: 500;">
+                  <option value="7">Last 7 Days</option>
+                  <option value="30">Last Month</option>
+                </select>
               </div>
               <!-- Injected by JS -->
               <div id="dashboard-production-chart" style="display: flex; flex-direction: column; min-height: 250px; justify-content: center; position: relative;">
               </div>
             </div>
-
+ 
             <!-- Slide 3: Daily Parts Dispatch Output -->
             <div class="card dashboard-chart-card disp-chart chart-slide-card" id="slide-dispatch-card">
-              <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <span>Daily Parts Dispatch Output</span>
-                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Total parts dispatched per day (last 7 days)</span>
+              <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                  <span>Daily Parts Dispatch Output</span>
+                  <span id="dispatch-chart-subtitle" style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Total parts dispatched per day (last 7 days)</span>
+                </div>
+                <select id="dispatch-timeframe-select" class="sidebar-search-input" style="width: auto; padding: 4px 8px; font-size: 0.75rem; margin: 0; background: var(--bg-card, #1e1e38); border: 1px solid var(--border-color, rgba(255,255,255,0.08)); height: 28px; border-radius: 6px; cursor: pointer; color: var(--text-primary); font-weight: 500;">
+                  <option value="7">Last 7 Days</option>
+                  <option value="30">Last Month</option>
+                </select>
               </div>
               <!-- Injected by JS -->
               <div id="dashboard-dispatch-chart" style="display: flex; flex-direction: column; min-height: 250px; justify-content: center; position: relative;">

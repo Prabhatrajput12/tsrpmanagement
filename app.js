@@ -1011,24 +1011,46 @@ function renderDashboardCharts() {
   // 3. Render Daily Production Output Area/Line SVG Chart
   const prodContainer = document.getElementById('dashboard-production-chart');
   if (prodContainer) {
-    const last7DaysProd = getProductionHistoryLast7Days();
-    prodContainer.innerHTML = generateAreaChartSvg(last7DaysProd, '#a855f7', '#a855f7');
+    const timeframeSelect = document.getElementById('production-timeframe-select');
+    const days = timeframeSelect ? parseInt(timeframeSelect.value) : 7;
+    
+    // Update subtitle text
+    const subtitle = document.getElementById('production-chart-subtitle');
+    if (subtitle) {
+      subtitle.innerText = days === 7 
+        ? "Total parts manufactured per day (last 7 days)" 
+        : "Total parts manufactured per day (last month)";
+    }
+    
+    const prodHistory = getProductionHistory(days);
+    prodContainer.innerHTML = generateAreaChartSvg(prodHistory, '#a855f7', '#a855f7');
   }
 
   // 4. Render Daily Dispatch Output Area/Line SVG Chart
   const dispatchContainer = document.getElementById('dashboard-dispatch-chart');
   if (dispatchContainer) {
-    const last7DaysDisp = getDispatchHistoryLast7Days();
-    dispatchContainer.innerHTML = generateAreaChartSvg(last7DaysDisp, '#3b82f6', '#3b82f6');
+    const timeframeSelect = document.getElementById('dispatch-timeframe-select');
+    const days = timeframeSelect ? parseInt(timeframeSelect.value) : 7;
+    
+    // Update subtitle text
+    const subtitle = document.getElementById('dispatch-chart-subtitle');
+    if (subtitle) {
+      subtitle.innerText = days === 7 
+        ? "Total parts dispatched per day (last 7 days)" 
+        : "Total parts dispatched per day (last month)";
+    }
+    
+    const dispatchHistory = getDispatchHistory(days);
+    dispatchContainer.innerHTML = generateAreaChartSvg(dispatchHistory, '#3b82f6', '#3b82f6');
   }
 }
 
-// Generate X-axis values for the last 7 days of production (combining saved estimates and manual adjustments)
-function getProductionHistoryLast7Days() {
+// Generate X-axis values for production history (combining saved estimates and manual adjustments)
+function getProductionHistory(numDays = 7) {
   const today = new Date();
   const history = [];
   
-  for (let i = 6; i >= 0; i--) {
+  for (let i = numDays - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     const dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -1068,12 +1090,12 @@ function getProductionHistoryLast7Days() {
   return history;
 }
 
-// Generate X-axis values for the last 7 days of dispatches
-function getDispatchHistoryLast7Days() {
+// Generate X-axis values for dispatch history
+function getDispatchHistory(numDays = 7) {
   const today = new Date();
   const history = [];
   
-  for (let i = 6; i >= 0; i--) {
+  for (let i = numDays - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     const dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -1139,12 +1161,15 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
   }
 
   let xLabels = '';
-  points.forEach((p) => {
-    const dateParts = p.date.split(',')[0].trim().split(' ');
-    const displayDate = dateParts.length >= 2 ? `${dateParts[0]} ${dateParts[1]}` : p.date;
-    xLabels += `
-      <text x="${p.x}" y="${height - 10}" fill="var(--text-secondary)" font-size="9" text-anchor="middle">${displayDate}</text>
-    `;
+  const labelInterval = data.length > 10 ? Math.ceil(data.length / 6) : 1;
+  points.forEach((p, i) => {
+    if (i % labelInterval === 0 || i === points.length - 1) {
+      const dateParts = p.date.split(',')[0].trim().split(' ');
+      const displayDate = dateParts.length >= 2 ? `${dateParts[0]} ${dateParts[1]}` : p.date;
+      xLabels += `
+        <text x="${p.x}" y="${height - 10}" fill="var(--text-secondary)" font-size="9" text-anchor="middle">${displayDate}</text>
+      `;
+    }
   });
 
   let columnsHtml = '';
@@ -1152,6 +1177,7 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
   const gradId = `chart-area-grad-${strokeColor.replace('#', '')}`;
 
   points.forEach((p, i) => {
+    const tooltipX = Math.max(45, Math.min(width - 45, p.x));
     columnsHtml += `
       <g class="chart-col-group" style="cursor: pointer;">
         <!-- Hover background rectangle (full vertical column) -->
@@ -1168,8 +1194,8 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
         
         <!-- Floating Tooltip bubble -->
         <g class="chart-tooltip-bubble" style="pointer-events: none; opacity: 0; transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));">
-          <rect x="${(p.x - 45).toFixed(1)}" y="${(p.y - 35).toFixed(1)}" width="90" height="24" rx="5" fill="var(--bg-card, #ffffff)" stroke="${strokeColor}" stroke-width="1.5" />
-          <text x="${p.x.toFixed(1)}" y="${(p.y - 20).toFixed(1)}" fill="var(--text-primary, #000000)" font-size="10" font-weight="800" text-anchor="middle">
+          <rect x="${(tooltipX - 45).toFixed(1)}" y="${(p.y - 35).toFixed(1)}" width="90" height="24" rx="5" fill="var(--bg-card, #ffffff)" stroke="${strokeColor}" stroke-width="1.5" />
+          <text x="${tooltipX.toFixed(1)}" y="${(p.y - 20).toFixed(1)}" fill="var(--text-primary, #000000)" font-size="10" font-weight="800" text-anchor="middle">
             ${p.quantity} pcs
           </text>
         </g>
@@ -4352,6 +4378,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initial load
   renderDashboardCharts();
   initChartsCarousel();
+
+  // Timeframe selectors
+  const prodSelect = document.getElementById('production-timeframe-select');
+  if (prodSelect) {
+    prodSelect.addEventListener('change', renderDashboardCharts);
+  }
+  const dispSelect = document.getElementById('dispatch-timeframe-select');
+  if (dispSelect) {
+    dispSelect.addEventListener('change', renderDashboardCharts);
+  }
 
   // Tab switching
   document.querySelectorAll('.nav-item').forEach(item => {
