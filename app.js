@@ -2074,6 +2074,8 @@ function handleCreateDispatchSubmit(e) {
 
   // Compile dispatched items
   const dispatchedItems = [];
+  let validationError = null;
+
   qtyInputs.forEach(input => {
     const row = input.closest('.dispatch-part-row');
     const checkbox = row.querySelector('.dispatch-part-checkbox');
@@ -2082,12 +2084,20 @@ function handleCreateDispatchSubmit(e) {
     const qty = parseFloat(input.value) || 0;
     if (qty > 0) {
       const partId = input.getAttribute('data-id');
+      const partName = input.getAttribute('data-name');
       const pcsInput = row.querySelector('.dispatch-part-pcs-per-box-input');
       const dimsInput = row.querySelector('.dispatch-part-dims-input');
       
       const pcsVal = parseFloat(pcsInput.value) || 50;
       const dimsVal = dimsInput.value.trim() || '12x12x12 in';
       const calcBoxes = Math.ceil(qty / pcsVal);
+
+      // Validation: Dispatched quantity must be a multiple of Pcs / Box so all boxes are fully packed
+      if (qty % pcsVal !== 0) {
+        const fullQty = calcBoxes * pcsVal;
+        const lowerQty = (calcBoxes - 1) * pcsVal;
+        validationError = `Validation Error for "${partName}":\nThe dispatch quantity (${qty} pcs) does not fill the last box (capacity: ${pcsVal} pcs per box).\n\nTo make all boxes full, you must either:\n- Dispatch ${fullQty} pcs (for ${calcBoxes} full boxes)\n- Dispatch ${lowerQty} pcs (for ${calcBoxes - 1} full boxes)\n- Adjust the "Pcs / Box" setting.`;
+      }
 
       // Resolve part PO number from estimate configuration
       let partPoNumber = '';
@@ -2100,7 +2110,7 @@ function handleCreateDispatchSubmit(e) {
 
       dispatchedItems.push({
         id: partId,
-        name: input.getAttribute('data-name'),
+        name: partName,
         dispatchedQty: qty,
         pcsPerBox: pcsVal,
         boxDimensions: dimsVal,
@@ -2109,6 +2119,11 @@ function handleCreateDispatchSubmit(e) {
       });
     }
   });
+
+  if (validationError) {
+    alert(validationError);
+    return; // Do not go forward!
+  }
 
   if (dispatchedItems.length === 0) {
     alert("Please select at least one part to dispatch and enter a quantity greater than 0.");
