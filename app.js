@@ -3660,7 +3660,7 @@ function populateSelectors() {
   state.templatesCatalog.forEach(tpl => {
     const opt = document.createElement('option');
     opt.value = tpl.id;
-    opt.innerText = tpl.name;
+    opt.innerText = tpl.poNumber ? `${tpl.name} (PO: ${tpl.poNumber})` : tpl.name;
     tplSelect.appendChild(opt);
   });
 
