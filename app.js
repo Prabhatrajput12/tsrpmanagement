@@ -2089,13 +2089,23 @@ function handleCreateDispatchSubmit(e) {
       const dimsVal = dimsInput.value.trim() || '12x12x12 in';
       const calcBoxes = Math.ceil(qty / pcsVal);
 
+      // Resolve part PO number from estimate configuration
+      let partPoNumber = '';
+      if (estimate.parts) {
+        const partObj = estimate.parts.find(p => p.id === partId);
+        if (partObj) {
+          partPoNumber = partObj.poNumber || '';
+        }
+      }
+
       dispatchedItems.push({
         id: partId,
         name: input.getAttribute('data-name'),
         dispatchedQty: qty,
         pcsPerBox: pcsVal,
         boxDimensions: dimsVal,
-        calculatedBoxes: calcBoxes
+        calculatedBoxes: calcBoxes,
+        poNumber: partPoNumber
       });
     }
   });
@@ -2312,6 +2322,18 @@ function openPrintPreviewForMultipleDispatches(dispatchIds) {
 
     let itemsRows = '';
     dispatch.items.forEach((it, idx) => {
+      // Backwards-compatibility resolver for old dispatch logs missing poNumber
+      let itemPo = it.poNumber || '';
+      if (!itemPo && dispatch.estimateId) {
+        const est = state.savedEstimates.find(e => e.id === dispatch.estimateId);
+        if (est && est.parts) {
+          const part = est.parts.find(p => p.id === it.id);
+          if (part) {
+            itemPo = part.poNumber || '';
+          }
+        }
+      }
+
       const boxDims = it.boxDimensions || '12x12x12 in';
       const pcsPer = it.pcsPerBox || '-';
       const totBoxes = it.calculatedBoxes || '-';
@@ -2321,6 +2343,7 @@ function openPrintPreviewForMultipleDispatches(dispatchIds) {
           <td style="text-align: center;">${idx + 1}</td>
           <td>
             <div style="font-weight: 600;">${it.name}</div>
+            ${itemPo ? `<div style="font-size: 0.72rem; color: #475569; margin-top: 2px;">PO No: ${itemPo}</div>` : ''}
           </td>
           <td style="text-align: right; font-weight: 500;">${it.dispatchedQty}</td>
           <td style="text-align: center; font-size: 0.8rem; color: #475569;">${boxDims}</td>
@@ -2331,6 +2354,25 @@ function openPrintPreviewForMultipleDispatches(dispatchIds) {
 
     const dateStr = dispatch.date || new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
     const timeStr = dispatch.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+    // Format Reference Quote to only show dispatched part names and their PO numbers
+    const dispatchedPartNames = dispatch.items.map(it => it.name).join(' + ');
+    
+    // Resolve unique PO numbers
+    const uniquePos = [...new Set(dispatch.items.map(it => {
+      let itemPo = it.poNumber || '';
+      if (!itemPo && dispatch.estimateId) {
+        const est = state.savedEstimates.find(e => e.id === dispatch.estimateId);
+        if (est && est.parts) {
+          const part = est.parts.find(p => p.id === it.id);
+          if (part) {
+            itemPo = part.poNumber || '';
+          }
+        }
+      }
+      return itemPo;
+    }).filter(Boolean))];
+    const poDisplay = uniquePos.length > 0 ? ` — PO No: ${uniquePos.join(', ')}` : '';
 
     fullHTML += `
       <div class="estimate-print-sheet">
@@ -2350,7 +2392,7 @@ function openPrintPreviewForMultipleDispatches(dispatchIds) {
           <div class="print-address-box">
             <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 4px; margin-bottom: 8px;">Consignee (Client Details)</h4>
             <p><strong>Client Representative:</strong> ${dispatch.clientName || 'General Client'}</p>
-            <p><strong>Reference Quote:</strong> ${dispatch.estimateTitle || 'N/A'}</p>
+            <p><strong>Reference Quote:</strong> ${dispatchedPartNames || 'N/A'}${poDisplay}</p>
           </div>
           <div class="print-address-box">
             <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 4px; margin-bottom: 8px;">Transport & Shipping Details</h4>
