@@ -4408,6 +4408,35 @@ document.addEventListener('DOMContentLoaded', () => {
   renderDashboardCharts();
   initChartsCarousel();
 
+  // Sidebar Collapsible Navigation
+  const appContainer = document.getElementById('app-container');
+  const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+  
+  if (appContainer && sidebarToggleBtn) {
+    // Restore sidebar state from localStorage
+    const sidebarState = localStorage.getItem('sidebar_state');
+    if (sidebarState === 'collapsed') {
+      appContainer.classList.add('sidebar-collapsed');
+      sidebarToggleBtn.setAttribute('title', 'Expand Sidebar');
+    }
+    
+    sidebarToggleBtn.addEventListener('click', () => {
+      appContainer.classList.toggle('sidebar-collapsed');
+      const isCollapsed = appContainer.classList.contains('sidebar-collapsed');
+      localStorage.setItem('sidebar_state', isCollapsed ? 'collapsed' : 'expanded');
+      sidebarToggleBtn.setAttribute('title', isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar');
+      
+      // Trigger carousel scroll recalculation to avoid visual misalignment when container width changes
+      setTimeout(() => {
+        const slider = document.getElementById('charts-slider-container');
+        if (slider) {
+          // Re-trigger scroll event to align and check arrow boundaries
+          slider.dispatchEvent(new Event('scroll'));
+        }
+      }, 350); // wait for CSS transition of 300ms to complete
+    });
+  }
+
   // Timeframe selectors
   const prodSelect = document.getElementById('production-timeframe-select');
   if (prodSelect) {

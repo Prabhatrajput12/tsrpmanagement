@@ -139,6 +139,22 @@ a:hover {
   position: relative;
 }
 
+/* Collapsible Sidebar Transition Classes */
+.sidebar {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color var(--transition-normal);
+}
+.main-content {
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color var(--transition-normal);
+}
+
+.sidebar-collapsed .sidebar {
+  transform: translateX(-100%);
+}
+.sidebar-collapsed .main-content {
+  margin-left: 0 !important;
+  padding-left: 60px;
+}
+
 /* Sidebar Navigation */
 .sidebar {
   width: 260px;
@@ -150,7 +166,48 @@ a:hover {
   position: fixed;
   height: 100vh;
   z-index: 100;
-  transition: transform var(--transition-normal), background-color var(--transition-normal);
+}
+
+/* Floating Sidebar Toggle Button */
+.sidebar-toggle-btn {
+  position: fixed;
+  top: 28px;
+  left: 244px; /* Centered exactly on the 260px border line */
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s, border-color 0.2s, color 0.2s;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  padding: 0;
+}
+.sidebar-toggle-btn:hover {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+}
+
+.sidebar-collapsed .sidebar-toggle-btn {
+  left: 14px;
+  transform: rotate(180deg); /* Arrow points the other way */
+}
+
+/* Hide toggle button on mobile/tablet viewports where layout is vertically stacked */
+@media (max-width: 900px) {
+  .sidebar-toggle-btn {
+    display: none !important;
+  }
+  .sidebar-collapsed .main-content {
+    padding-left: 16px !important;
+  }
 }
 
 .logo-container {
