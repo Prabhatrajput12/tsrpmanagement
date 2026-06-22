@@ -2392,7 +2392,7 @@ function handleCreateDispatchSubmit(e) {
         const fullQty = calcBoxes * pcsVal;
         const lowerQty = (calcBoxes - 1) * pcsVal;
         const neededQty = fullQty - qty;
-        validationError = `Validation Error for "${partName}":\nThe dispatch quantity (${qty} pcs) does not full the last box (capacity: ${pcsVal} pcs per box).\n\nYou need to add ${neededQty} pcs to full the last box.\n\nTo make all boxes full, you must either:\n- Dispatch ${fullQty} pcs (for ${calcBoxes} full boxes)\n- Dispatch ${lowerQty} pcs (for ${calcBoxes - 1} full boxes)\n- Adjust the "Pcs / Box" setting.`;
+        validationError = `Validation Error for "${partName}":\nFor ${calcBoxes} box(es), the maximum number of pieces is ${fullQty} (since each box contains ${pcsVal} pcs). Your dispatch quantity of ${qty} pcs leaves the last box incomplete. You need to add ${neededQty} pcs to full the last box.\n\nTo make all boxes full, you must either:\n- Dispatch ${fullQty} pcs (for ${calcBoxes} full boxes)\n- Dispatch ${lowerQty} pcs (for ${calcBoxes - 1} full boxes)\n- Adjust the "Pcs / Box" setting.`;
       }
 
       // Resolve part PO number from user input in the dispatch modal
