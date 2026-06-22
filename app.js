@@ -350,9 +350,23 @@ const formatWeightForDisplay = (amount, unit) => {
     return `${amt.toFixed(2)} ${unit}`;
   }
   
+  if (u === 'kg' || u === 'kilogram' || u === 'kilograms') {
+    if (amt < 1.0 && amt > 0) {
+      return `${(amt * 1000).toFixed(2)} g`;
+    }
+    return `${amt.toFixed(2)} ${unit}`;
+  }
+  
   if (u === 'oz' || u === 'ounce' || u === 'ounces') {
     if (amt >= 16) {
       return `${(amt / 16).toFixed(2)} lbs`;
+    }
+    return `${amt.toFixed(2)} ${unit}`;
+  }
+  
+  if (u === 'lb' || u === 'lbs' || u === 'pound' || u === 'pounds') {
+    if (amt < 1.0 && amt > 0) {
+      return `${(amt * 16).toFixed(2)} oz`;
     }
     return `${amt.toFixed(2)} ${unit}`;
   }
