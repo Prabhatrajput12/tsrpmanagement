@@ -2391,7 +2391,8 @@ function handleCreateDispatchSubmit(e) {
       if (qty % pcsVal !== 0) {
         const fullQty = calcBoxes * pcsVal;
         const lowerQty = (calcBoxes - 1) * pcsVal;
-        validationError = `Validation Error for "${partName}":\nThe dispatch quantity (${qty} pcs) does not fill the last box (capacity: ${pcsVal} pcs per box).\n\nTo make all boxes full, you must either:\n- Dispatch ${fullQty} pcs (for ${calcBoxes} full boxes)\n- Dispatch ${lowerQty} pcs (for ${calcBoxes - 1} full boxes)\n- Adjust the "Pcs / Box" setting.`;
+        const neededQty = fullQty - qty;
+        validationError = `Validation Error for "${partName}":\nThe dispatch quantity (${qty} pcs) does not fill the last box (capacity: ${pcsVal} pcs per box).\n\nYou need to add ${neededQty} pcs to fill the last box.\n\nTo make all boxes full, you must either:\n- Dispatch ${fullQty} pcs (for ${calcBoxes} full boxes)\n- Dispatch ${lowerQty} pcs (for ${calcBoxes - 1} full boxes)\n- Adjust the "Pcs / Box" setting.`;
       }
 
       // Resolve part PO number from user input in the dispatch modal
