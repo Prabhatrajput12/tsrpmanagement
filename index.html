@@ -111,6 +111,22 @@
       
       <!-- 1. DASHBOARD TAB PANEL -->
       <section id="dashboard-panel" class="tab-panel active">
+        <style>
+          .dashboard-chart-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid var(--border-color);
+          }
+          .dashboard-chart-card.prod-chart:hover {
+            border-color: rgba(168, 85, 247, 0.4) !important;
+            box-shadow: 0 12px 30px -10px rgba(168, 85, 247, 0.25), 0 0 20px 1px rgba(168, 85, 247, 0.08) !important;
+            transform: translateY(-2px);
+          }
+          .dashboard-chart-card.disp-chart:hover {
+            border-color: rgba(59, 130, 246, 0.4) !important;
+            box-shadow: 0 12px 30px -10px rgba(59, 130, 246, 0.25), 0 0 20px 1px rgba(59, 130, 246, 0.08) !important;
+            transform: translateY(-2px);
+          }
+        </style>
         <header class="main-header">
           <div class="header-title-section">
             <h1>Workshop Dashboard</h1>
@@ -155,7 +171,7 @@
             </div>
           </div>
           
-          <div class="card" style="margin-bottom: 0;">
+          <div class="card dashboard-chart-card prod-chart" style="margin-bottom: 0;">
             <div class="card-title">
               <span>Daily Parts Production Output</span>
               <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Total parts manufactured per day (last 7 days)</span>
@@ -165,7 +181,7 @@
             </div>
           </div>
 
-          <div class="card" style="margin-bottom: 0;">
+          <div class="card dashboard-chart-card disp-chart" style="margin-bottom: 0;">
             <div class="card-title">
               <span>Daily Parts Dispatch Output</span>
               <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Total parts dispatched per day (last 7 days)</span>

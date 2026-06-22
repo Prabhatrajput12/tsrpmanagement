@@ -1175,19 +1175,32 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
     `;
   });
 
-  let dots = '';
+  let columnsHtml = '';
+  const colWidth = plotWidth / (data.length - 1 || 1);
   const gradId = `chart-area-grad-${strokeColor.replace('#', '')}`;
-  points.forEach((p) => {
-    dots += `
-      <g class="chart-dot-group" style="cursor: pointer;">
-        <circle cx="${p.x}" cy="${p.y}" r="4" fill="#ffffff" stroke="${strokeColor}" stroke-width="2.5" />
-        <g class="chart-tooltip-bubble" style="pointer-events: none; opacity: 0; transition: opacity 0.2s;">
-          <rect x="${p.x - 45}" y="${p.y - 32}" width="90" height="22" rx="4" fill="var(--card-bg)" stroke="${strokeColor}" stroke-width="1" />
-          <text x="${p.x}" y="${p.y - 18}" fill="var(--text-primary)" font-size="9.5" font-weight="bold" text-anchor="middle">
+
+  points.forEach((p, i) => {
+    columnsHtml += `
+      <g class="chart-col-group" style="cursor: pointer;">
+        <!-- Hover background rectangle (full vertical column) -->
+        <rect x="${(p.x - colWidth / 2).toFixed(1)}" y="${(paddingTop).toFixed(1)}" width="${colWidth.toFixed(1)}" height="${plotHeight.toFixed(1)}" 
+              fill="${strokeColor}" opacity="0" class="chart-hover-rect" style="transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);" />
+        
+        <!-- Vertical guide line -->
+        <line x1="${p.x.toFixed(1)}" y1="${(paddingTop).toFixed(1)}" x2="${p.x.toFixed(1)}" y2="${(height - paddingBottom).toFixed(1)}" 
+              stroke="${strokeColor}" stroke-dasharray="2,2" opacity="0" class="chart-hover-line" style="transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);" />
+        
+        <!-- White circle with colored border -->
+        <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="#ffffff" stroke="${strokeColor}" stroke-width="2.5" 
+                style="transition: r 0.2s ease-in-out, stroke-width 0.2s ease-in-out;" />
+        
+        <!-- Floating Tooltip bubble -->
+        <g class="chart-tooltip-bubble" style="pointer-events: none; opacity: 0; transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));">
+          <rect x="${(p.x - 45).toFixed(1)}" y="${(p.y - 35).toFixed(1)}" width="90" height="24" rx="5" fill="var(--card-bg)" stroke="${strokeColor}" stroke-width="1.5" />
+          <text x="${p.x.toFixed(1)}" y="${(p.y - 20).toFixed(1)}" fill="var(--text-primary)" font-size="10" font-weight="800" text-anchor="middle">
             ${p.quantity} pcs
           </text>
         </g>
-        <circle cx="${p.x}" cy="${p.y}" r="12" fill="transparent" />
       </g>
     `;
   });
@@ -1200,20 +1213,26 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
           <stop offset="100%" stop-color="${fillColor}" stop-opacity="0.0"/>
         </linearGradient>
         <style>
-          .chart-dot-group {
+          .chart-col-group {
             pointer-events: all;
           }
-          .chart-dot-group:hover .chart-tooltip-bubble {
+          .chart-col-group:hover .chart-hover-rect {
+            opacity: 0.04 !important;
+          }
+          .chart-col-group:hover .chart-hover-line {
+            opacity: 0.3 !important;
+          }
+          .chart-col-group:hover .chart-tooltip-bubble {
             opacity: 1 !important;
           }
-          .chart-dot-group:hover circle:first-child {
-            r: 6px !important;
+          .chart-col-group:hover circle {
+            r: 6.5px !important;
             stroke-width: 3.5px !important;
           }
           .chart-tooltip-bubble {
             pointer-events: none;
             opacity: 0;
-            transition: opacity 0.2s ease-in-out;
+            transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           }
         </style>
       </defs>
@@ -1230,8 +1249,8 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
       <!-- X Labels -->
       ${xLabels}
       
-      <!-- Dots -->
-      ${dots}
+      <!-- Interactive Columns (Hover Rect, Guide Line, Dot, Tooltip) -->
+      ${columnsHtml}
     </svg>
   `;
 }
