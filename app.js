@@ -1265,38 +1265,64 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
   `;
 }
 
-// Helper to draw a beautiful SVG horizontal bar chart for stock levels
+// Helper to draw a beautiful SVG horizontal bar chart for stock levels (using Logarithmic scaling to balance large/small outliers)
 function generateStockBarChartSvg(materials) {
   const rowHeight = 45;
   const paddingTop = 15;
   const paddingBottom = 30;
   const paddingLeft = 100; // Allow enough space for material names
-  const paddingRight = 20;
+  const paddingRight = 85; // Allow space for value labels on the right
   
   const height = paddingTop + paddingBottom + (materials.length * rowHeight);
-  const width = 600;
+  const width = 650;
   const plotWidth = width - paddingLeft - paddingRight;
   
   // Find max value to calibrate X axis
   const maxVal = Math.max(...materials.map(m => Math.max(m.stock, m.minStock)), 20);
-  const maxAxisVal = Math.ceil(maxVal * 1.1 / 10) * 10;
+  const maxLog = Math.log10(maxVal + 1);
   
   let gridLines = '';
-  const divisions = 5;
-  for (let i = 0; i <= divisions; i++) {
-    const xVal = paddingLeft + (i / divisions) * plotWidth;
-    const qtyVal = Math.round((i / divisions) * maxAxisVal);
+  const milestones = [0, 10, 100, 1000, 10000, 100000, 1000000];
+  milestones.forEach(val => {
+    if (val > maxVal) return;
+    const logVal = Math.log10(val + 1);
+    const xVal = paddingLeft + (logVal / maxLog) * plotWidth;
+    
+    // Check if it's too close to the end
+    if (plotWidth - (xVal - paddingLeft) < 35) return;
+    
+    let label = val.toString();
+    if (val >= 1000) {
+      label = (val / 1000) + 'K';
+    }
+    
     gridLines += `
       <line x1="${xVal}" y1="${paddingTop}" x2="${xVal}" y2="${height - paddingBottom}" stroke="rgba(255,255,255,0.06)" class="grid-line" stroke-dasharray="3,3" />
-      <text x="${xVal}" y="${height - 10}" fill="var(--text-secondary)" font-size="9" text-anchor="middle">${qtyVal}</text>
+      <text x="${xVal}" y="${height - 10}" fill="var(--text-secondary)" font-size="9" text-anchor="middle">${label}</text>
     `;
+  });
+  
+  // Also add the maximum value line at the very end
+  const maxXVal = paddingLeft + plotWidth;
+  let maxLabel = Math.round(maxVal).toString();
+  if (maxVal >= 1000) {
+    maxLabel = (Math.round(maxVal / 100) / 10) + 'K';
   }
+  gridLines += `
+    <line x1="${maxXVal}" y1="${paddingTop}" x2="${maxXVal}" y2="${height - paddingBottom}" stroke="rgba(255,255,255,0.06)" class="grid-line" stroke-dasharray="3,3" />
+    <text x="${maxXVal}" y="${height - 10}" fill="var(--text-secondary)" font-size="9" text-anchor="middle">${maxLabel}</text>
+  `;
   
   let barsHtml = '';
   materials.forEach((m, i) => {
     const barY = paddingTop + i * rowHeight + (rowHeight - 16) / 2; // 16px thickness
-    const stockWidth = Math.max(4, (m.stock / maxAxisVal) * plotWidth);
-    const minStockX = paddingLeft + (m.minStock / maxAxisVal) * plotWidth;
+    
+    // Logarithmic widths
+    const valLog = Math.log10(m.stock + 1);
+    const minLog = Math.log10(m.minStock + 1);
+    
+    const stockWidth = Math.max(4, (valLog / maxLog) * plotWidth);
+    const minStockX = paddingLeft + (minLog / maxLog) * plotWidth;
     
     const isLow = m.stock < m.minStock;
     const strokeColor = isLow ? '#ef4444' : '#a855f7';
@@ -1320,6 +1346,9 @@ function generateStockBarChartSvg(materials) {
         <!-- Min Stock Threshold Marker Pin -->
         <line x1="${minStockX}" y1="${barY - 4}" x2="${minStockX}" y2="${barY + 20}" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" />
         <circle cx="${minStockX}" cy="${barY - 4}" r="3.5" fill="#ef4444" />
+        
+        <!-- Text label next to the bar showing the exact amount -->
+        <text x="${paddingLeft + stockWidth + 8}" y="${barY + 12}" fill="var(--text-primary)" font-size="9.5" font-weight="700">${m.stock.toFixed(1)} / ${m.minStock} ${m.unit}</text>
         
         <!-- Floating Tooltip -->
         <g class="chart-tooltip-bubble" style="pointer-events: none; opacity: 0; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));">
