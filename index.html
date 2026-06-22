@@ -702,6 +702,7 @@ create table if not exists public.blueprints (
   mfg_time_unit text,
   materials jsonb,
   operations jsonb,
+  stock numeric default 0,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

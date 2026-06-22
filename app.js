@@ -88,7 +88,8 @@ async function syncAllToCloud() {
         mfg_time: t.mfgTime || 0,
         mfg_time_unit: t.mfgTimeUnit || 'sec',
         materials: t.materials || [],
-        operations: t.operations || []
+        operations: t.operations || [],
+        stock: t.stock || 0
       }));
       await supabaseClient.from('blueprints').upsert(records);
       const ids = state.templatesCatalog.map(x => x.id);
@@ -198,7 +199,8 @@ async function loadStateFromCloud() {
         mfgTime: parseFloat(t.mfg_time) || 0,
         mfgTimeUnit: t.mfg_time_unit || 'sec',
         materials: t.materials || [],
-        operations: t.operations || []
+        operations: t.operations || [],
+        stock: parseFloat(t.stock) || 0
       }));
     }
 
@@ -1049,6 +1051,15 @@ function renderPartsTab() {
         <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 12px;">
           ${tpl.description || 'No description provided.'}
         </p>
+        <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(79, 70, 229, 0.08); border: 1px solid rgba(79, 70, 229, 0.2); padding: 8px 10px; border-radius: 6px; margin: 10px 0;">
+          <div style="font-size: 0.85rem; font-weight: 700; color: var(--accent-primary); display: flex; align-items: center; gap: 6px;">
+            📦 Finished Stock: <span class="blueprint-stock-value" style="font-size: 0.95rem; color: var(--text-primary);">${tpl.stock || 0}</span> pcs
+          </div>
+          <div style="display: flex; gap: 4px;">
+            <button class="btn btn-secondary btn-sm adjust-blueprint-stock-btn" data-id="${tpl.id}" data-action="deduct" title="Deduct stock" style="padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 24px; line-height: 1;">-</button>
+            <button class="btn btn-secondary btn-sm adjust-blueprint-stock-btn" data-id="${tpl.id}" data-action="add" title="Add stock" style="padding: 2px 6px; font-size: 0.75rem; height: 24px; min-width: 24px; line-height: 1;">+</button>
+          </div>
+        </div>
         <div style="font-size: 0.8rem; background: rgba(0,0,0,0.15); border-radius: 6px; padding: 8px; border: 1px solid var(--border-color);">
           <div style="margin-bottom: 4px; font-weight: 600;">Materials:</div>
           <div style="max-height: 80px; overflow-y: auto; color: var(--text-secondary);">
@@ -1096,6 +1107,34 @@ function renderPartsTab() {
         renderPartsTab();
         populateSelectors();
       }
+    });
+  });
+
+  // Wire stock adjustment buttons
+  container.querySelectorAll('.adjust-blueprint-stock-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      const action = btn.getAttribute('data-action');
+      const blueprint = state.templatesCatalog.find(t => t.id === id);
+      if (!blueprint) return;
+
+      const amtStr = prompt(`Enter quantity of "${blueprint.name}" to ${action === 'add' ? 'add to' : 'deduct from'} finished stock:`, "100");
+      if (amtStr === null) return;
+      const amt = parseInt(amtStr);
+      if (isNaN(amt) || amt <= 0) {
+        alert("Please enter a valid positive number.");
+        return;
+      }
+
+      if (action === 'add') {
+        blueprint.stock = (blueprint.stock || 0) + amt;
+      } else {
+        blueprint.stock = Math.max(0, (blueprint.stock || 0) - amt);
+      }
+
+      saveStateToStorage();
+      renderPartsTab();
     });
   });
 }
@@ -1588,7 +1627,8 @@ function handleAddPartSubmit(e) {
       mfgTime,
       mfgTimeUnit,
       materials: JSON.parse(JSON.stringify(state.modalSelectedMaterials)),
-      operations: []
+      operations: [],
+      stock: 0
     };
     state.templatesCatalog.push(newPart);
     saveStateToStorage();
@@ -2147,6 +2187,31 @@ function handleCreateDispatchSubmit(e) {
     date: dateStr,
     time: timeStr
   };
+
+  let stockWarning = "";
+  dispatchedItems.forEach(item => {
+    const blueprint = state.templatesCatalog.find(t => t.id === item.id);
+    if (blueprint) {
+      const currentStock = blueprint.stock || 0;
+      if (currentStock < item.dispatchedQty) {
+        stockWarning += `- ${item.name}: dispatching ${item.dispatchedQty} pcs, but finished stock is only ${currentStock} pcs (short by ${item.dispatchedQty - currentStock} pcs)\n`;
+      }
+    }
+  });
+
+  if (stockWarning) {
+    if (!confirm(`WARNING: Some parts have insufficient finished stock for this dispatch:\n\n${stockWarning}\nProceeding will push finished stock levels below zero.\n\nDo you want to proceed?`)) {
+      return;
+    }
+  }
+
+  // Deduct from Finished Goods Stock
+  dispatchedItems.forEach(item => {
+    const blueprint = state.templatesCatalog.find(t => t.id === item.id);
+    if (blueprint) {
+      blueprint.stock = (blueprint.stock || 0) - item.dispatchedQty;
+    }
+  });
 
   state.dispatches.unshift(newDispatch);
   saveStateToStorage();
@@ -3111,6 +3176,15 @@ function bookOrderAndDeductStock() {
       catalogItem.stock = parseFloat((catalogItem.stock - item.calculatedQty).toFixed(3));
     }
   });
+
+  // Increment finished stock of the blueprint/part being manufactured
+  const templateId = state.activeEstimate.templateId;
+  if (templateId) {
+    const blueprint = state.templatesCatalog.find(t => t.id === templateId);
+    if (blueprint) {
+      blueprint.stock = (blueprint.stock || 0) + (state.activeEstimate.quantity || 1);
+    }
+  }
 
   saveStateToStorage();
   calculateActiveEstimate(); 
