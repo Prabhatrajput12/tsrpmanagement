@@ -2387,17 +2387,29 @@ function handleCreateDispatchSubmit(e) {
       const dimsVal = dimsInput.value.trim() || '12x12x12 in';
       const calcBoxes = Math.ceil(qty / pcsVal);
 
+      // Resolve part PO number from user input in the dispatch modal
+      const poInput = row.querySelector('.dispatch-part-po-input');
+      const partPoNumber = poInput ? poInput.value.trim() : '';
+
+      // Create a descriptive label to distinguish duplicate part names (e.g. PO or stock batch)
+      let partLabel = partName;
+      if (partPoNumber) {
+        partLabel += ` (PO: ${partPoNumber})`;
+      } else {
+        const infoLabel = row.querySelector('span[style*="font-size: 0.75rem"]');
+        if (infoLabel) {
+          const infoText = infoLabel.textContent.trim().replace(/\s+/g, ' ');
+          partLabel += ` (${infoText})`;
+        }
+      }
+
       // Validation: Dispatched quantity must be a multiple of Pcs / Box so all boxes are fully packed
       if (qty % pcsVal !== 0) {
         const fullQty = calcBoxes * pcsVal;
         const lowerQty = (calcBoxes - 1) * pcsVal;
         const neededQty = fullQty - qty;
-        validationErrors.push(`Validation Error for "${partName}":\nFor ${calcBoxes} box(es), max pieces are ${fullQty} (each box contains ${pcsVal} pcs). You dispatched ${qty} pcs. Add ${neededQty} pcs to full the last box.`);
+        validationErrors.push(`Validation Error for "${partLabel}":\nFor ${calcBoxes} box(es), max pieces are ${fullQty} (each box contains ${pcsVal} pcs). You dispatched ${qty} pcs. Add ${neededQty} pcs to full the last box.`);
       }
-
-      // Resolve part PO number from user input in the dispatch modal
-      const poInput = row.querySelector('.dispatch-part-po-input');
-      const partPoNumber = poInput ? poInput.value.trim() : '';
 
       dispatchedItems.push({
         id: partId,
