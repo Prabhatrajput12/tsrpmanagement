@@ -36,7 +36,9 @@ const state = {
   editingMaterialId: null,
   activeMaterialFilter: 'all',
   dispatches: [],
-  productionHistory: []
+  productionHistory: [],
+  isLoggedIn: false,
+  currentUser: null
 };
 
 // --- Supabase Cloud Client Setup ---
@@ -51,6 +53,557 @@ if (supabaseUrl && supabaseKey) {
     supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
   } catch (err) {
     console.error("Supabase initialization error:", err);
+  }
+}
+
+
+// --- User Authentication & Security States ---
+let authMode = 'login'; // 'login' or 'signup' for Supabase Auth mode
+
+function initLocalAuth() {
+  if (!localStorage.getItem('ws_master_password')) {
+    localStorage.setItem('ws_master_password', 'admin123');
+  }
+  if (!localStorage.getItem('ws_security_question')) {
+    localStorage.setItem('ws_security_question', 'What was the name of your first school?');
+  }
+  if (!localStorage.getItem('ws_security_answer')) {
+    localStorage.setItem('ws_security_answer', 'standard');
+  }
+}
+
+async function initAuth() {
+  initLocalAuth();
+  
+  const authOverlay = document.getElementById('auth-overlay');
+  const authEmailGroup = document.getElementById('auth-email-group');
+  const authPasswordLabel = document.getElementById('auth-password-label');
+  const authModeIndicator = document.getElementById('auth-mode-indicator');
+  const authSubmitBtn = document.getElementById('auth-submit-btn');
+  const authToggleLink = document.getElementById('auth-toggle-mode-link');
+  const authLogoutBtn = document.getElementById('auth-logout-btn');
+  
+  if (supabaseClient) {
+    // Supabase Mode
+    if (authToggleLink) authToggleLink.style.display = 'inline';
+    if (authEmailGroup) authEmailGroup.style.display = 'block';
+    if (authPasswordLabel) authPasswordLabel.innerText = "Password";
+    
+    setupAuthStateListener();
+    
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
+        state.isLoggedIn = true;
+        state.currentUser = session.user;
+        if (authOverlay) authOverlay.classList.remove('active');
+        if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+        return true;
+      }
+    } catch (e) {
+      console.error("Error checking Supabase session:", e);
+    }
+    
+    state.isLoggedIn = false;
+    if (authOverlay) authOverlay.classList.add('active');
+    updateAuthDOM();
+  } else {
+    // Local Mode
+    if (authToggleLink) authToggleLink.style.display = 'none';
+    if (authEmailGroup) authEmailGroup.style.display = 'none';
+    if (authPasswordLabel) authPasswordLabel.innerText = "Master Password";
+    if (authModeIndicator) authModeIndicator.innerText = "Local Database Lock";
+    
+    const localSession = sessionStorage.getItem('ws_is_logged_in');
+    if (localSession === 'true') {
+      state.isLoggedIn = true;
+      if (authOverlay) authOverlay.classList.remove('active');
+      if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+      return true;
+    }
+    
+    state.isLoggedIn = false;
+    if (authOverlay) authOverlay.classList.add('active');
+  }
+  return false;
+}
+
+function updateAuthDOM() {
+  const authModeIndicator = document.getElementById('auth-mode-indicator');
+  const authSubmitBtn = document.getElementById('auth-submit-btn');
+  const authToggleLink = document.getElementById('auth-toggle-mode-link');
+  
+  if (authMode === 'login') {
+    if (authModeIndicator) authModeIndicator.innerText = "Cloud Database Lock";
+    if (authSubmitBtn) authSubmitBtn.innerText = "Unlock Dashboard";
+    if (authToggleLink) authToggleLink.innerText = "Create Account";
+  } else {
+    if (authModeIndicator) authModeIndicator.innerText = "Create Cloud Account";
+    if (authSubmitBtn) authSubmitBtn.innerText = "Sign Up & Register";
+    if (authToggleLink) authToggleLink.innerText = "Sign In to Existing Account";
+  }
+}
+
+function setupAuthStateListener() {
+  if (!supabaseClient) return;
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    const authOverlay = document.getElementById('auth-overlay');
+    const authLogoutBtn = document.getElementById('auth-logout-btn');
+    
+    if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+      if (session) {
+        state.isLoggedIn = true;
+        state.currentUser = session.user;
+        if (authOverlay) authOverlay.classList.remove('active');
+        if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+        
+        // Hide password recovery/set forms if open
+        const newPassForm = document.getElementById('auth-new-password-form');
+        const recoveryForm = document.getElementById('auth-recovery-form');
+        const loginForm = document.getElementById('auth-login-form');
+        if (newPassForm) newPassForm.style.display = 'none';
+        if (recoveryForm) recoveryForm.style.display = 'none';
+        if (loginForm) loginForm.style.display = 'block';
+        
+        // Fetch cloud data and setup realtime sync
+        await loadStateFromCloud();
+        setupRealtimeSync();
+        
+        // Render updated UI
+        populateSelectors();
+        updateGlobalAlerts();
+        renderDashboardCharts();
+      }
+    } else if (event === 'SIGNED_OUT') {
+      state.isLoggedIn = false;
+      state.currentUser = null;
+      if (authOverlay) authOverlay.classList.add('active');
+      if (authLogoutBtn) authLogoutBtn.style.display = 'none';
+      
+      // Clear data states
+      state.materialsCatalog = [];
+      state.operationsCatalog = [];
+      state.templatesCatalog = [];
+      state.savedEstimates = [];
+      state.dispatches = [];
+      state.productionHistory = [];
+      
+      populateSelectors();
+      updateGlobalAlerts();
+      renderDashboardCharts();
+    } else if (event === 'PASSWORD_RECOVERY') {
+      state.isLoggedIn = false;
+      if (authOverlay) authOverlay.classList.add('active');
+      
+      const newPassForm = document.getElementById('auth-new-password-form');
+      const recoveryForm = document.getElementById('auth-recovery-form');
+      const loginForm = document.getElementById('auth-login-form');
+      if (loginForm) loginForm.style.display = 'none';
+      if (recoveryForm) recoveryForm.style.display = 'none';
+      if (newPassForm) newPassForm.style.display = 'block';
+    }
+  });
+}
+
+async function handleLogout() {
+  if (supabaseClient) {
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) console.error("Error signing out:", error);
+  } else {
+    sessionStorage.removeItem('ws_is_logged_in');
+    window.location.reload();
+  }
+}
+
+async function handleLoginSubmit(e) {
+  e.preventDefault();
+  const authCard = document.querySelector('.auth-card');
+  const errorEl = document.getElementById('auth-error-msg');
+  const emailInput = document.getElementById('auth-email');
+  const emailVal = emailInput ? emailInput.value.trim() : '';
+  const passwordVal = document.getElementById('auth-password').value;
+  
+  if (errorEl) {
+    errorEl.style.display = 'none';
+    errorEl.innerText = '';
+  }
+  
+  if (supabaseClient) {
+    if (authMode === 'login') {
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email: emailVal,
+        password: passwordVal
+      });
+      if (error) {
+        shakeCard(authCard);
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = error.message;
+        }
+      }
+    } else {
+      const { error } = await supabaseClient.auth.signUp({
+        email: emailVal,
+        password: passwordVal,
+        options: {
+          data: {
+            security_question: "What was the name of your first school?",
+            security_answer: "standard"
+          }
+        }
+      });
+      if (error) {
+        shakeCard(authCard);
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = error.message;
+        }
+      } else {
+        alert("Registration initiated! If email confirmation is required, please check your email. Otherwise, you can log in now.");
+        authMode = 'login';
+        updateAuthDOM();
+      }
+    }
+  } else {
+    const masterPassword = localStorage.getItem('ws_master_password') || 'admin123';
+    if (passwordVal === masterPassword) {
+      sessionStorage.setItem('ws_is_logged_in', 'true');
+      state.isLoggedIn = true;
+      
+      const authOverlay = document.getElementById('auth-overlay');
+      if (authOverlay) authOverlay.classList.remove('active');
+      
+      const authLogoutBtn = document.getElementById('auth-logout-btn');
+      if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+      
+      // Load and refresh
+      loadStateFromStorage();
+      populateSelectors();
+      updateGlobalAlerts();
+      renderDashboardCharts();
+    } else {
+      shakeCard(authCard);
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = "Incorrect master password.";
+      }
+    }
+  }
+}
+
+function shakeCard(card) {
+  if (!card) return;
+  card.classList.remove('shake');
+  void card.offsetWidth; // Trigger reflow
+  card.classList.add('shake');
+  setTimeout(() => card.classList.remove('shake'), 400);
+}
+
+function openForgotPasswordFlow() {
+  const loginForm = document.getElementById('auth-login-form');
+  const recoveryForm = document.getElementById('auth-recovery-form');
+  if (loginForm) loginForm.style.display = 'none';
+  if (recoveryForm) recoveryForm.style.display = 'block';
+  
+  const questionDisplay = document.getElementById('recovery-question-display');
+  const recoveryLocalFields = document.getElementById('recovery-local-fields');
+  const recoverySupaInfo = document.getElementById('recovery-supabase-info');
+  const recoveryEmailGroup = document.getElementById('recovery-email-group');
+  const recoveryEmail = document.getElementById('recovery-email');
+  const recoverySubmitBtn = document.getElementById('recovery-submit-btn');
+  
+  if (supabaseClient) {
+    if (recoveryLocalFields) recoveryLocalFields.style.display = 'none';
+    if (recoverySupaInfo) recoverySupaInfo.style.display = 'block';
+    if (recoveryEmailGroup) recoveryEmailGroup.style.display = 'block';
+    if (recoveryEmail) recoveryEmail.required = true;
+    if (recoverySubmitBtn) recoverySubmitBtn.innerText = "Send Reset Link";
+  } else {
+    if (recoveryLocalFields) recoveryLocalFields.style.display = 'block';
+    if (recoverySupaInfo) recoverySupaInfo.style.display = 'none';
+    if (recoveryEmailGroup) recoveryEmailGroup.style.display = 'none';
+    if (recoveryEmail) recoveryEmail.required = false;
+    if (recoverySubmitBtn) recoverySubmitBtn.innerText = "Reset Password";
+    
+    if (questionDisplay) {
+      questionDisplay.value = localStorage.getItem('ws_security_question') || "What was the name of your first school?";
+    }
+  }
+}
+
+async function handleRecoverySubmit(e) {
+  e.preventDefault();
+  const authCard = document.querySelector('.auth-card');
+  const errorEl = document.getElementById('recovery-error-msg');
+  
+  if (errorEl) {
+    errorEl.style.display = 'none';
+    errorEl.innerText = '';
+  }
+  
+  if (supabaseClient) {
+    const emailInput = document.getElementById('recovery-email');
+    const emailVal = emailInput ? emailInput.value.trim() : '';
+    if (!emailVal) {
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = "Please enter your email address.";
+      }
+      return;
+    }
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(emailVal, {
+      redirectTo: window.location.origin + window.location.pathname
+    });
+    if (error) {
+      shakeCard(authCard);
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = error.message;
+      }
+    } else {
+      alert("Password reset email sent! Please check your inbox for the recovery link.");
+      const recoveryForm = document.getElementById('auth-recovery-form');
+      const loginForm = document.getElementById('auth-login-form');
+      if (recoveryForm) recoveryForm.style.display = 'none';
+      if (loginForm) loginForm.style.display = 'block';
+    }
+  } else {
+    const answerInput = document.getElementById('recovery-answer');
+    const answerVal = answerInput ? answerInput.value.trim().toLowerCase() : '';
+    const newPassInput = document.getElementById('recovery-new-password');
+    const newPassVal = newPassInput ? newPassInput.value : '';
+    
+    if (!answerVal || !newPassVal) {
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = "Please fill in all recovery fields.";
+      }
+      return;
+    }
+    
+    const savedAnswer = (localStorage.getItem('ws_security_answer') || 'standard').toLowerCase().trim();
+    if (answerVal === savedAnswer) {
+      localStorage.setItem('ws_master_password', newPassVal);
+      sessionStorage.setItem('ws_is_logged_in', 'true');
+      state.isLoggedIn = true;
+      
+      const authOverlay = document.getElementById('auth-overlay');
+      if (authOverlay) authOverlay.classList.remove('active');
+      
+      const authLogoutBtn = document.getElementById('auth-logout-btn');
+      if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+      
+      alert("Password reset successful! You are now logged in.");
+      
+      // Load and refresh
+      loadStateFromStorage();
+      populateSelectors();
+      updateGlobalAlerts();
+      renderDashboardCharts();
+    } else {
+      shakeCard(authCard);
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = "Incorrect answer to security question.";
+      }
+    }
+  }
+}
+
+async function handleNewPasswordSubmit(e) {
+  e.preventDefault();
+  const authCard = document.querySelector('.auth-card');
+  const errorEl = document.getElementById('new-password-error-msg');
+  const newPassInput = document.getElementById('recovery-set-password');
+  const newPassVal = newPassInput ? newPassInput.value : '';
+  const confirmPassInput = document.getElementById('recovery-set-confirm');
+  const confirmPassVal = confirmPassInput ? confirmPassInput.value : '';
+  
+  if (errorEl) {
+    errorEl.style.display = 'none';
+    errorEl.innerText = '';
+  }
+  
+  if (newPassVal !== confirmPassVal) {
+    shakeCard(authCard);
+    if (errorEl) {
+      errorEl.style.display = 'block';
+      errorEl.innerText = "Passwords do not match.";
+    }
+    return;
+  }
+  
+  if (newPassVal.length < 6) {
+    shakeCard(authCard);
+    if (errorEl) {
+      errorEl.style.display = 'block';
+      errorEl.innerText = "Password must be at least 6 characters.";
+    }
+    return;
+  }
+  
+  const { error } = await supabaseClient.auth.updateUser({ password: newPassVal });
+  if (error) {
+    shakeCard(authCard);
+    if (errorEl) {
+      errorEl.style.display = 'block';
+      errorEl.innerText = error.message;
+    }
+  } else {
+    alert("Password updated successfully! Welcome back.");
+    const newPassForm = document.getElementById('auth-new-password-form');
+    const loginForm = document.getElementById('auth-login-form');
+    if (newPassForm) newPassForm.style.display = 'none';
+    if (loginForm) loginForm.style.display = 'block';
+    
+    const authOverlay = document.getElementById('auth-overlay');
+    if (authOverlay) authOverlay.classList.remove('active');
+    
+    // Load and refresh
+    await loadStateFromCloud();
+    setupRealtimeSync();
+    populateSelectors();
+    updateGlobalAlerts();
+    renderDashboardCharts();
+  }
+}
+
+function openSecurityModal() {
+  const modal = document.getElementById('security-settings-modal');
+  if (!modal) return;
+  
+  const select = document.getElementById('security-question-select');
+  if (supabaseClient) {
+    const q = state.currentUser?.user_metadata?.security_question;
+    if (q && select) select.value = q;
+  } else {
+    const q = localStorage.getItem('ws_security_question');
+    if (q && select) select.value = q;
+  }
+  
+  modal.classList.add('active');
+}
+
+function closeSecurityModal() {
+  const modal = document.getElementById('security-settings-modal');
+  if (modal) {
+    modal.classList.remove('active');
+    const form = document.getElementById('security-settings-form');
+    if (form) form.reset();
+    const statusMsg = document.getElementById('security-status-msg');
+    if (statusMsg) statusMsg.style.display = 'none';
+  }
+}
+
+async function handleSecuritySettingsSubmit(e) {
+  e.preventDefault();
+  
+  const modal = document.getElementById('security-settings-modal');
+  const errorEl = document.getElementById('security-status-msg');
+  const currentPass = document.getElementById('security-current-password').value;
+  const newPass = document.getElementById('security-new-password').value;
+  const confirmPass = document.getElementById('security-confirm-password').value;
+  const question = document.getElementById('security-question-select').value;
+  const answer = document.getElementById('security-answer').value.trim();
+  
+  if (errorEl) {
+    errorEl.style.display = 'none';
+    errorEl.innerText = '';
+  }
+  
+  if (supabaseClient) {
+    if (!state.currentUser || !state.currentUser.email) {
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = "No active user session.";
+      }
+      return;
+    }
+    const { error: verifyError } = await supabaseClient.auth.signInWithPassword({
+      email: state.currentUser.email,
+      password: currentPass
+    });
+    if (verifyError) {
+      if (modal) shakeCard(modal.querySelector('.modal-card'));
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = "Incorrect current password.";
+      }
+      return;
+    }
+    
+    if (newPass) {
+      if (newPass !== confirmPass) {
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "New passwords do not match.";
+        }
+        return;
+      }
+      if (newPass.length < 6) {
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "New password must be at least 6 characters.";
+        }
+        return;
+      }
+      const { error: passError } = await supabaseClient.auth.updateUser({ password: newPass });
+      if (passError) {
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "Failed to update password: " + passError.message;
+        }
+        return;
+      }
+    }
+    
+    if (answer) {
+      const { error: metaError } = await supabaseClient.auth.updateUser({
+        data: {
+          security_question: question,
+          security_answer: answer.toLowerCase()
+        }
+      });
+      if (metaError) {
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "Failed to update security recovery: " + metaError.message;
+        }
+        return;
+      }
+    }
+    
+    alert("Security settings updated successfully!");
+    closeSecurityModal();
+  } else {
+    const savedPass = localStorage.getItem('ws_master_password') || 'admin123';
+    if (currentPass !== savedPass) {
+      if (modal) shakeCard(modal.querySelector('.modal-card'));
+      if (errorEl) {
+        errorEl.style.display = 'block';
+        errorEl.innerText = "Incorrect current password.";
+      }
+      return;
+    }
+    
+    if (newPass) {
+      if (newPass !== confirmPass) {
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "New passwords do not match.";
+        }
+        return;
+      }
+      localStorage.setItem('ws_master_password', newPass);
+    }
+    
+    if (answer) {
+      localStorage.setItem('ws_security_question', question);
+      localStorage.setItem('ws_security_answer', answer.toLowerCase());
+    }
+    
+    alert("Security settings updated successfully!");
+    closeSecurityModal();
   }
 }
 
@@ -316,7 +869,7 @@ function loadStateFromStorage() {
     localStorage.removeItem('ws_production_history');
   }
 
-  if (supabaseClient) {
+  if (supabaseClient && state.isLoggedIn) {
     loadStateFromCloud();
     setupRealtimeSync();
   }
@@ -4666,14 +5219,65 @@ function initVoiceSearch() {
 }
 
 // --- Core Event Listeners & Bootstrapping ---
-document.addEventListener('DOMContentLoaded', () => {
-  loadStateFromStorage();
-  populateSelectors();
-  updateGlobalAlerts();
-  initVoiceSearch();
+document.addEventListener('DOMContentLoaded', async () => {
+  // Bind all Auth Event Listeners
+  const loginForm = document.getElementById('auth-login-form');
+  if (loginForm) loginForm.addEventListener('submit', handleLoginSubmit);
+
+  const recoveryForm = document.getElementById('auth-recovery-form');
+  if (recoveryForm) recoveryForm.addEventListener('submit', handleRecoverySubmit);
+
+  const newPassForm = document.getElementById('auth-new-password-form');
+  if (newPassForm) newPassForm.addEventListener('submit', handleNewPasswordSubmit);
+
+  const securityForm = document.getElementById('security-settings-form');
+  if (securityForm) securityForm.addEventListener('submit', handleSecuritySettingsSubmit);
+
+  const forgotLink = document.getElementById('auth-forgot-link');
+  if (forgotLink) forgotLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    openForgotPasswordFlow();
+  });
+
+  const backToLoginLink = document.getElementById('auth-back-to-login');
+  if (backToLoginLink) backToLoginLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    const recForm = document.getElementById('auth-recovery-form');
+    const logForm = document.getElementById('auth-login-form');
+    if (recForm) recForm.style.display = 'none';
+    if (logForm) logForm.style.display = 'block';
+  });
+
+  const toggleLink = document.getElementById('auth-toggle-mode-link');
+  if (toggleLink) toggleLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    authMode = (authMode === 'login') ? 'signup' : 'login';
+    updateAuthDOM();
+  });
+
+  const logoutBtn = document.getElementById('auth-logout-btn');
+  if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+
+  const securityBtn = document.getElementById('security-settings-btn');
+  if (securityBtn) securityBtn.addEventListener('click', openSecurityModal);
+
+  const closeSecurityBtn1 = document.getElementById('close-security-settings-modal');
+  if (closeSecurityBtn1) closeSecurityBtn1.addEventListener('click', closeSecurityModal);
+
+  const closeSecurityBtn2 = document.getElementById('close-security-settings-btn');
+  if (closeSecurityBtn2) closeSecurityBtn2.addEventListener('click', closeSecurityModal);
+
+  // Authenticate user
+  const authenticated = await initAuth();
   
-  // Initial load
-  renderDashboardCharts();
+  if (authenticated) {
+    loadStateFromStorage();
+    populateSelectors();
+    updateGlobalAlerts();
+    renderDashboardCharts();
+  }
+  
+  initVoiceSearch();
   initChartsCarousel();
 
   // Sidebar Collapsible Navigation

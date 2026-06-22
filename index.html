@@ -8,6 +8,102 @@
 </head>
 <body>
 
+  <!-- Full-Screen Auth Overlay -->
+  <div id="auth-overlay" class="auth-overlay active">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="logo-icon" style="margin: 0 auto 12px; width: 48px; height: 48px;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px; stroke: #fff;">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+          </svg>
+        </div>
+        <h2 style="font-family: var(--font-heading); font-weight: 800; font-size: 1.6rem; color: #fff;">TSRPS</h2>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 24px;">Estimate & Inventory Manager</p>
+      </div>
+
+      <!-- Login Form -->
+      <form id="auth-login-form">
+        <div id="auth-mode-indicator" style="font-size: 0.75rem; color: var(--accent-primary); text-transform: uppercase; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.5px; text-align: center;">Local Database Lock</div>
+        
+        <!-- Email field for Supabase (hidden in Local mode) -->
+        <div class="form-group" id="auth-email-group" style="display: none; margin-bottom: 12px;">
+          <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Email Address</label>
+          <input type="email" id="auth-email" class="form-control" placeholder="name@company.com" style="height: 38px; font-size: 0.85rem;">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label class="form-label" id="auth-password-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Master Password</label>
+          <input type="password" id="auth-password" class="form-control" placeholder="••••••••" style="height: 38px; font-size: 0.85rem;" required>
+        </div>
+
+        <div id="auth-error-msg" style="color: var(--color-danger); font-size: 0.78rem; text-align: center; margin-bottom: 12px; display: none; padding: 6px; background: rgba(239, 68, 68, 0.08); border-radius: 6px;"></div>
+
+        <button type="submit" id="auth-submit-btn" class="btn btn-primary" style="width: 100%; height: 38px; font-size: 0.85rem; font-weight: 600;">Unlock Dashboard</button>
+        
+        <div style="margin-top: 16px; display: flex; justify-content: space-between; font-size: 0.78rem;">
+          <a href="#" id="auth-forgot-link" style="color: var(--text-muted); text-decoration: none; transition: color 0.2s;">Forgot Password?</a>
+          <a href="#" id="auth-toggle-mode-link" style="color: var(--accent-primary); text-decoration: none; transition: color 0.2s; display: none;">Create Account</a>
+        </div>
+      </form>
+
+      <!-- Forgot Password / Recovery Form -->
+      <form id="auth-recovery-form" style="display: none;">
+        <div style="font-size: 0.75rem; color: var(--color-warning); text-transform: uppercase; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.5px; text-align: center;">Reset Password</div>
+        
+        <div id="recovery-supabase-info" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 16px;">
+          Enter your email address and we will send you a password reset link:
+        </div>
+
+        <div class="form-group" id="recovery-email-group" style="display: none; margin-bottom: 16px;">
+          <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Email Address</label>
+          <input type="email" id="recovery-email" class="form-control" placeholder="name@company.com" style="height: 38px; font-size: 0.85rem;">
+        </div>
+
+        <!-- Local Mode recovery fields -->
+        <div id="recovery-local-fields">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Security Question</label>
+            <input type="text" id="recovery-question-display" class="form-control" readonly style="height: 38px; font-size: 0.85rem; background: rgba(0,0,0,0.15); color: var(--text-secondary);" value="No security question configured.">
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Answer</label>
+            <input type="text" id="recovery-answer" class="form-control" placeholder="Type your answer" style="height: 38px; font-size: 0.85rem;">
+          </div>
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">New Password</label>
+            <input type="password" id="recovery-new-password" class="form-control" placeholder="Enter new password" style="height: 38px; font-size: 0.85rem;">
+          </div>
+        </div>
+
+        <div id="recovery-error-msg" style="color: var(--color-danger); font-size: 0.78rem; text-align: center; margin-bottom: 12px; display: none; padding: 6px; background: rgba(239, 68, 68, 0.08); border-radius: 6px;"></div>
+
+        <button type="submit" id="recovery-submit-btn" class="btn btn-primary" style="width: 100%; height: 38px; font-size: 0.85rem; font-weight: 600;">Reset Password</button>
+        
+        <div style="margin-top: 16px; text-align: center; font-size: 0.78rem;">
+          <a href="#" id="auth-back-to-login" style="color: var(--text-muted); text-decoration: none; transition: color 0.2s;">Back to Login</a>
+        </div>
+      </form>
+
+      <!-- Set New Password Form (for Supabase Recovery redirect) -->
+      <form id="auth-new-password-form" style="display: none;">
+        <div style="font-size: 0.75rem; color: var(--accent-primary); text-transform: uppercase; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.5px; text-align: center;">Set New Password</div>
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 16px; text-align: center;">
+          Your recovery link is verified. Please enter a new password below:
+        </p>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">New Password</label>
+          <input type="password" id="recovery-set-password" class="form-control" placeholder="••••••••" style="height: 38px; font-size: 0.85rem; width: 100%; border-radius: 6px; box-sizing: border-box;" required>
+        </div>
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Confirm New Password</label>
+          <input type="password" id="recovery-set-confirm" class="form-control" placeholder="••••••••" style="height: 38px; font-size: 0.85rem; width: 100%; border-radius: 6px; box-sizing: border-box;" required>
+        </div>
+        <div id="new-password-error-msg" style="color: var(--color-danger); font-size: 0.78rem; text-align: center; margin-bottom: 12px; display: none; padding: 6px; background: rgba(239, 68, 68, 0.08); border-radius: 6px;"></div>
+        <button type="submit" id="new-password-submit-btn" class="btn btn-primary" style="width: 100%; height: 38px; font-size: 0.85rem; font-weight: 600;">Save Password & Login</button>
+      </form>
+    </div>
+  </div>
+
   <div class="app-container" id="app-container">
     
     <!-- Floating Sidebar Toggle Button -->
@@ -99,15 +195,25 @@
       </nav>
       
       <div class="sidebar-footer">
+        <button id="security-settings-btn" class="theme-toggle-btn" style="margin-bottom: 8px;">
+          <span style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+            🔒 Security Settings
+          </span>
+        </button>
         <button id="db-settings-btn" class="theme-toggle-btn" style="margin-bottom: 8px; background: rgba(79, 70, 229, 0.1); border-color: rgba(79, 70, 229, 0.3); color: var(--accent-primary);">
           <span style="display: flex; align-items: center; justify-content: center; gap: 6px;">
             ☁️ Cloud DB Settings
           </span>
         </button>
-        <button id="theme-toggle" class="theme-toggle-btn">
+        <button id="theme-toggle" class="theme-toggle-btn" style="margin-bottom: 8px;">
           <span id="theme-toggle-text" style="display: flex; align-items: center; justify-content: center; gap: 6px;">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
             Switch to Light
+          </span>
+        </button>
+        <button id="auth-logout-btn" class="theme-toggle-btn" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); color: var(--color-danger); display: none;">
+          <span style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+            🚪 Log Out
           </span>
         </button>
         <div style="font-size: 0.75rem; text-align: center; color: var(--text-muted);">
@@ -998,6 +1104,65 @@ create policy "Allow all users to manage production_history" on public.productio
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="close-db-settings-btn">Cancel</button>
         <button type="button" class="btn btn-primary" id="save-db-settings-btn">Save & Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Security Settings Modal -->
+  <div id="security-settings-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3>User Security Settings</h3>
+        <button id="close-security-settings-modal" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.4;">
+          Configure your master password and security question for backup recovery.
+        </p>
+        <form id="security-settings-form">
+          <!-- Current Password (always required to verify authorization) -->
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Current Password</label>
+            <input type="password" id="security-current-password" class="form-control" placeholder="••••••••" style="font-size: 0.85rem; height: 38px; width: 100%; border-radius: 6px; box-sizing: border-box;" required>
+          </div>
+          
+          <div style="border-top: 1px solid var(--border-color); margin: 16px 0; padding-top: 16px;">
+            <h4 style="font-size: 0.85rem; margin-bottom: 12px; color: var(--text-secondary);">Change Password</h4>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">New Password</label>
+              <input type="password" id="security-new-password" class="form-control" placeholder="Leave blank to keep current" style="font-size: 0.85rem; height: 38px; width: 100%; border-radius: 6px; box-sizing: border-box;">
+            </div>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Confirm New Password</label>
+              <input type="password" id="security-confirm-password" class="form-control" placeholder="Leave blank to keep current" style="font-size: 0.85rem; height: 38px; width: 100%; border-radius: 6px; box-sizing: border-box;">
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid var(--border-color); margin: 16px 0; padding-top: 16px;">
+            <h4 style="font-size: 0.85rem; margin-bottom: 12px; color: var(--text-secondary);">Recovery Security Question</h4>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Security Question</label>
+              <select id="security-question-select" class="form-control" style="font-size: 0.85rem; height: 38px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); width: 100%; border-radius: 6px; padding: 0 12px; box-sizing: border-box;">
+                <option value="What was the name of your first school?">What was the name of your first school?</option>
+                <option value="What is the name of your favorite childhood friend?">What is the name of your favorite childhood friend?</option>
+                <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
+                <option value="What was the name of your first pet?">What was the name of your first pet?</option>
+                <option value="In what city were you born?">In what city were you born?</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Security Answer</label>
+              <input type="text" id="security-answer" class="form-control" placeholder="Enter answer (case-insensitive)" style="font-size: 0.85rem; height: 38px; width: 100%; border-radius: 6px; box-sizing: border-box;">
+            </div>
+          </div>
+
+          <div id="security-status-msg" style="color: var(--color-danger); font-size: 0.78rem; text-align: center; margin-bottom: 12px; display: none; padding: 6px; background: rgba(239, 68, 68, 0.08); border-radius: 6px;"></div>
+
+          <div class="modal-footer" style="padding: 12px 0 0 0; border-top: none;">
+            <button type="button" class="btn btn-secondary" id="close-security-settings-btn">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="save-security-settings-btn">Save Changes</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
