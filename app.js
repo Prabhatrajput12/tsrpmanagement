@@ -404,7 +404,8 @@ function calculateActiveEstimate() {
   // 1. Calculate Materials Cost
   let totalMaterialCost = 0;
   state.activeEstimate.items.forEach(item => {
-    const catalogItem = state.materialsCatalog.find(m => m.id === item.id);
+    const catalogItem = state.materialsCatalog.find(m => m.id === item.id) ||
+                        state.materialsCatalog.find(m => m.name.toLowerCase() === item.name.toLowerCase());
     if (catalogItem) {
       item.stock = catalogItem.stock;
       item.minStock = catalogItem.minStock;
@@ -3164,7 +3165,8 @@ function loadTemplateRecipe(templateId) {
   const partInstanceId = 'inst-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
 
   const newItems = template.materials.map(m => {
-    const catalogItem = state.materialsCatalog.find(x => x.id === m.id) || m;
+    const catalogItem = state.materialsCatalog.find(x => x.id === m.id) ||
+                        state.materialsCatalog.find(x => x.name.toLowerCase() === m.name.toLowerCase()) || m;
     return {
       id: m.id,
       name: m.name,
@@ -3357,9 +3359,11 @@ function bookOrderAndDeductStock() {
   if (!confirm(confirmMsg)) return;
 
   state.activeEstimate.items.forEach(item => {
-    const catalogItem = state.materialsCatalog.find(m => m.id === item.id);
+    const catalogItem = state.materialsCatalog.find(m => m.id === item.id) ||
+                        state.materialsCatalog.find(m => m.name.toLowerCase() === item.name.toLowerCase());
     if (catalogItem) {
       catalogItem.stock = parseFloat((catalogItem.stock - item.calculatedQty).toFixed(3));
+      item.id = catalogItem.id; // Sync the item ID with catalog ID
     }
   });
 
