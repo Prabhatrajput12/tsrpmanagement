@@ -1848,3 +1848,10 @@ a:hover {
   }
 }
 
+.dispatch-est-checkbox-item {
+  transition: background-color var(--transition-fast);
+}
+.dispatch-est-checkbox-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+

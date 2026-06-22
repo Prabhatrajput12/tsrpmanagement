@@ -1996,7 +1996,7 @@ function renderLedgerTab() {
     state.dispatches.forEach(disp => {
       if (disp.items && Array.isArray(disp.items)) {
         disp.items.forEach(item => {
-          if (item.id === blueprint.id) {
+          if (item.id === blueprint.id || item.name.toLowerCase() === blueprint.name.toLowerCase()) {
             totalDispatched += parseFloat(item.dispatchedQty) || 0;
           }
         });
@@ -2033,7 +2033,7 @@ function renderLedgerTab() {
 // --- 5b. Dispatch & Shipping Tab ---
 function openCreateDispatchModal() {
   const modal = document.getElementById('create-dispatch-modal');
-  const estSelect = document.getElementById('dispatch-estimate-select');
+  const estContainer = document.getElementById('dispatch-estimates-container');
   const clientInput = document.getElementById('dispatch-client-input');
   const partsContainer = document.getElementById('dispatch-parts-list-container');
   const vehicleInput = document.getElementById('dispatch-vehicle-input');
@@ -2042,7 +2042,7 @@ function openCreateDispatchModal() {
   const statusSelect = document.getElementById('dispatch-status-select');
   const remarksInput = document.getElementById('dispatch-remarks-input');
 
-  if (!modal || !estSelect || !partsContainer) return;
+  if (!modal || !estContainer || !partsContainer) return;
 
   // Clear inputs
   clientInput.value = '';
@@ -2050,20 +2050,36 @@ function openCreateDispatchModal() {
   driverInput.value = '';
   remarksInput.value = '';
   statusSelect.value = 'Dispatched';
-  partsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">Select a saved estimate to configure parts.</span>';
+  partsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">Select one or more saved estimates to configure parts.</span>';
 
   // Generate unique Gate Pass number
   const randNum = Math.floor(10000 + Math.random() * 90000);
   gatepassInput.value = `CH-${randNum}`;
 
-  // Populate Saved Estimates dropdown
-  estSelect.innerHTML = '<option value="" disabled selected>-- Select an Estimate --</option>';
-  state.savedEstimates.forEach(est => {
-    const opt = document.createElement('option');
-    opt.value = est.id;
-    opt.innerText = `${est.title} (${est.clientName || 'General Client'} - ${est.date})`;
-    estSelect.appendChild(opt);
-  });
+  // Populate Saved Estimates checklist
+  estContainer.innerHTML = '';
+  if (state.savedEstimates.length === 0) {
+    estContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic; padding: 4px;">No saved estimates found.</span>';
+  } else {
+    state.savedEstimates.forEach(est => {
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'dispatch-est-checkbox-item';
+      itemDiv.style.display = 'flex';
+      itemDiv.style.alignItems = 'center';
+      itemDiv.style.gap = '8px';
+      itemDiv.style.padding = '4px 6px';
+      itemDiv.style.borderRadius = '4px';
+      itemDiv.style.cursor = 'pointer';
+      
+      itemDiv.innerHTML = `
+        <input type="checkbox" class="dispatch-est-checkbox" value="${est.id}" id="est-chk-${est.id}" style="width: 16px; height: 16px; accent-color: var(--accent-primary); cursor: pointer;">
+        <label for="est-chk-${est.id}" style="font-size: 0.85rem; color: var(--text-primary); cursor: pointer; margin-bottom: 0; flex: 1; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+          ${est.title} (${est.clientName || 'General Client'} - ${est.date})
+        </label>
+      `;
+      estContainer.appendChild(itemDiv);
+    });
+  }
 
   modal.classList.add('active');
 }
@@ -2073,58 +2089,104 @@ function closeCreateDispatchModal() {
   if (modal) modal.classList.remove('active');
 }
 
-// Handler for when the estimate is changed in the dropdown
-function handleDispatchEstimateChange(e) {
-  const estId = e.target.value;
-  const estimate = state.savedEstimates.find(est => est.id === estId);
+// Handler for when checked estimates change
+function handleDispatchEstimateChange() {
+  const checkedBoxes = document.querySelectorAll('.dispatch-est-checkbox:checked');
   const clientInput = document.getElementById('dispatch-client-input');
   const partsContainer = document.getElementById('dispatch-parts-list-container');
+  
+  if (!partsContainer) return;
 
-  if (!estimate || !partsContainer) return;
-
-  // Auto-populate client name
-  if (clientInput) {
-    clientInput.value = estimate.clientName || 'General Client';
+  if (checkedBoxes.length === 0) {
+    if (clientInput) clientInput.value = '';
+    partsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-style: italic;">Select one or more saved estimates to configure parts.</span>';
+    return;
   }
 
-  // Populate parts list
+  // Get selected estimates
+  const estIds = Array.from(checkedBoxes).map(cb => cb.value);
+  const selectedEstimates = state.savedEstimates.filter(est => estIds.includes(est.id));
+
+  // Auto-populate client name (comma-separated unique names)
+  if (clientInput) {
+    const uniqueClients = [...new Set(selectedEstimates.map(est => est.clientName || 'General Client').filter(Boolean))];
+    clientInput.value = uniqueClients.join(', ');
+  }
+
+  // Populate parts list by aggregating parts of the same name (material)
   partsContainer.innerHTML = '';
+  const aggregatedParts = {};
   
-  const partsList = [];
-  if (estimate.parts && estimate.parts.length > 0) {
-    estimate.parts.forEach(p => {
-      partsList.push({ id: p.id, name: p.name, quantity: p.quantity });
-    });
-  } else {
-    // Group estimate.items by partInstanceId
-    const seenParts = {};
-    estimate.items.forEach(it => {
-      const pid = it.partInstanceId || 'other';
-      if (!seenParts[pid]) {
-        seenParts[pid] = { id: pid, name: it.partName || 'Custom Part', quantity: estimate.quantity || 1 };
+  selectedEstimates.forEach(estimate => {
+    const estParts = [];
+    if (estimate.parts && estimate.parts.length > 0) {
+      estimate.parts.forEach(p => {
+        estParts.push({ id: p.id, name: p.name, quantity: p.quantity, poNumber: p.poNumber || '' });
+      });
+    } else {
+      const seenParts = {};
+      estimate.items.forEach(it => {
+        const pid = it.partInstanceId || 'other';
+        if (!seenParts[pid]) {
+          const matchingTemplate = state.templatesCatalog.find(t => t.name === it.partName);
+          const defaultPo = matchingTemplate ? (matchingTemplate.poNumber || '') : '';
+          seenParts[pid] = { id: pid, name: it.partName || 'Custom Part', quantity: estimate.quantity || 1, poNumber: defaultPo };
+        }
+      });
+      Object.values(seenParts).forEach(p => estParts.push(p));
+    }
+
+    estParts.forEach(part => {
+      // Find how many of this part have already been dispatched for this specific estimate
+      let alreadyDispatched = 0;
+      state.dispatches.forEach(disp => {
+        if (disp.estimateId) {
+          const dispEstIds = disp.estimateId.split(',');
+          if (dispEstIds.includes(estimate.id)) {
+            const dispItem = disp.items.find(it => it.name.toLowerCase() === part.name.toLowerCase());
+            if (dispItem) {
+              alreadyDispatched += parseFloat(dispItem.dispatchedQty) || 0;
+            }
+          }
+        }
+      });
+
+      const remainingQty = Math.max(0, part.quantity - alreadyDispatched);
+      const nameKey = part.name.toLowerCase();
+
+      if (!aggregatedParts[nameKey]) {
+        const blueprint = state.templatesCatalog.find(t => t.name.toLowerCase() === nameKey);
+        aggregatedParts[nameKey] = {
+          id: blueprint ? blueprint.id : part.id,
+          name: part.name,
+          totalOrdered: 0,
+          totalRemaining: 0,
+          poNumbers: [],
+          estimateIds: []
+        };
+      }
+
+      aggregatedParts[nameKey].totalOrdered += part.quantity;
+      aggregatedParts[nameKey].totalRemaining += remainingQty;
+      if (!aggregatedParts[nameKey].estimateIds.includes(estimate.id)) {
+        aggregatedParts[nameKey].estimateIds.push(estimate.id);
+      }
+      if (part.poNumber && !aggregatedParts[nameKey].poNumbers.includes(part.poNumber)) {
+        aggregatedParts[nameKey].poNumbers.push(part.poNumber);
       }
     });
-    Object.values(seenParts).forEach(p => partsList.push(p));
-  }
+  });
+
+  const partsList = Object.values(aggregatedParts);
 
   if (partsList.length === 0) {
-    partsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--color-danger);">This estimate contains no parts configuration.</span>';
+    partsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--color-danger);">These estimates contain no parts configuration.</span>';
     return;
   }
 
   partsList.forEach(part => {
-    // Calculate already dispatched quantity for this partInstanceId across all dispatches
-    let alreadyDispatched = 0;
-    state.dispatches.forEach(disp => {
-      if (disp.estimateId === estId) {
-        const item = disp.items.find(it => it.id === part.id);
-        if (item) {
-          alreadyDispatched += parseFloat(item.dispatchedQty) || 0;
-        }
-      }
-    });
-
-    const remainingQty = Math.max(0, part.quantity - alreadyDispatched);
+    const remainingQty = part.totalRemaining;
+    const poListStr = part.poNumbers.join(', ');
 
     const row = document.createElement('div');
     row.className = 'dispatch-part-row';
@@ -2142,12 +2204,12 @@ function handleDispatchEstimateChange(e) {
           <input type="checkbox" class="dispatch-part-checkbox" data-id="${part.id}" checked style="width: 16px; height: 16px; accent-color: var(--accent-primary); cursor: pointer;">
           <span style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 250px;">${part.name}</span>
         </label>
-        <span style="font-size: 0.75rem; color: var(--text-secondary);">Ordered: ${part.quantity} (Rem: ${remainingQty})</span>
+        <span style="font-size: 0.75rem; color: var(--text-secondary);">Ordered: ${part.totalOrdered} (Rem: ${remainingQty})</span>
       </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
         <div class="form-group" style="margin-bottom: 0;">
           <label style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 2px; display: block;">Qty to Dispatch</label>
-          <input type="number" min="0" max="${part.quantity}" step="any" class="form-control dispatch-part-qty-input" data-id="${part.id}" data-name="${part.name}" value="${remainingQty}" style="height: 32px; padding: 4px 8px; font-size: 0.85rem; margin: 0;" required>
+          <input type="number" min="0" step="any" class="form-control dispatch-part-qty-input" data-id="${part.id}" data-name="${part.name}" value="${remainingQty}" style="height: 32px; padding: 4px 8px; font-size: 0.85rem; margin: 0;" required>
         </div>
         <div class="form-group" style="margin-bottom: 0;">
           <label style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 2px; display: block;">Pcs / Box</label>
@@ -2158,9 +2220,15 @@ function handleDispatchEstimateChange(e) {
           <div class="dispatch-part-calculated-boxes" style="height: 32px; line-height: 32px; font-size: 0.85rem; font-weight: 700; color: var(--accent-primary);">${Math.ceil(remainingQty / 50)} Box${Math.ceil(remainingQty / 50) !== 1 ? 'es' : ''}</div>
         </div>
       </div>
-      <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
-        <label style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap;">Box Dimensions:</label>
-        <input type="text" class="form-control dispatch-part-dims-input" data-id="${part.id}" placeholder="e.g. 12x12x12 in" value="12x12x12 in" style="height: 28px; padding: 2px 8px; font-size: 0.8rem; margin: 0;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px;">
+        <div class="form-group" style="margin-bottom: 0; display: flex; gap: 8px; align-items: center;">
+          <label style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap; margin-bottom: 0;">PO Number(s):</label>
+          <input type="text" class="form-control dispatch-part-po-input" data-id="${part.id}" value="${poListStr}" placeholder="e.g. 23451, 23452" style="height: 28px; padding: 2px 8px; font-size: 0.8rem; margin: 0; flex: 1;">
+        </div>
+        <div class="form-group" style="margin-bottom: 0; display: flex; gap: 8px; align-items: center;">
+          <label style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap; margin-bottom: 0;">Box Dimensions:</label>
+          <input type="text" class="form-control dispatch-part-dims-input" data-id="${part.id}" placeholder="e.g. 12x12x12 in" value="12x12x12 in" style="height: 28px; padding: 2px 8px; font-size: 0.8rem; margin: 0; flex: 1;">
+        </div>
       </div>
     `;
     partsContainer.appendChild(row);
@@ -2170,7 +2238,7 @@ function handleDispatchEstimateChange(e) {
 function handleCreateDispatchSubmit(e) {
   e.preventDefault();
   
-  const estSelect = document.getElementById('dispatch-estimate-select');
+  const checkedEstBoxes = document.querySelectorAll('.dispatch-est-checkbox:checked');
   const clientInput = document.getElementById('dispatch-client-input');
   const vehicleInput = document.getElementById('dispatch-vehicle-input');
   const driverInput = document.getElementById('dispatch-driver-input');
@@ -2179,12 +2247,13 @@ function handleCreateDispatchSubmit(e) {
   const remarksInput = document.getElementById('dispatch-remarks-input');
   const qtyInputs = document.querySelectorAll('.dispatch-part-qty-input');
 
-  const estId = estSelect.value;
-  const estimate = state.savedEstimates.find(est => est.id === estId);
-  if (!estimate) {
-    alert("Please select a valid estimate.");
+  if (checkedEstBoxes.length === 0) {
+    alert("Please select at least one estimate.");
     return;
   }
+
+  const estIds = Array.from(checkedEstBoxes).map(cb => cb.value);
+  const selectedEstimates = state.savedEstimates.filter(est => estIds.includes(est.id));
 
   // Compile dispatched items
   const dispatchedItems = [];
@@ -2213,14 +2282,9 @@ function handleCreateDispatchSubmit(e) {
         validationError = `Validation Error for "${partName}":\nThe dispatch quantity (${qty} pcs) does not fill the last box (capacity: ${pcsVal} pcs per box).\n\nTo make all boxes full, you must either:\n- Dispatch ${fullQty} pcs (for ${calcBoxes} full boxes)\n- Dispatch ${lowerQty} pcs (for ${calcBoxes - 1} full boxes)\n- Adjust the "Pcs / Box" setting.`;
       }
 
-      // Resolve part PO number from estimate configuration
-      let partPoNumber = '';
-      if (estimate.parts) {
-        const partObj = estimate.parts.find(p => p.id === partId);
-        if (partObj) {
-          partPoNumber = partObj.poNumber || '';
-        }
-      }
+      // Resolve part PO number from user input in the dispatch modal
+      const poInput = row.querySelector('.dispatch-part-po-input');
+      const partPoNumber = poInput ? poInput.value.trim() : '';
 
       dispatchedItems.push({
         id: partId,
@@ -2247,11 +2311,13 @@ function handleCreateDispatchSubmit(e) {
   const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
+  const clientNameVal = clientInput.value.trim() || selectedEstimates.map(est => est.clientName || 'General Client').filter((v, i, a) => a.indexOf(v) === i).join(', ');
+
   const newDispatch = {
     id: `DSP-${generateId()}`,
-    estimateId: estId,
-    estimateTitle: estimate.title,
-    clientName: clientInput.value.trim() || estimate.clientName || 'General Client',
+    estimateId: estIds.join(','),
+    estimateTitle: selectedEstimates.map(est => est.title).join(', '),
+    clientName: clientNameVal,
     vehicleNumber: vehicleInput.value.trim(),
     driverName: driverInput.value.trim(),
     gatePass: gatepassInput.value.trim(),
@@ -2264,7 +2330,8 @@ function handleCreateDispatchSubmit(e) {
 
   let stockWarning = "";
   dispatchedItems.forEach(item => {
-    const blueprint = state.templatesCatalog.find(t => t.id === item.id);
+    const blueprint = state.templatesCatalog.find(t => t.id === item.id) ||
+                      state.templatesCatalog.find(t => t.name.toLowerCase() === item.name.toLowerCase());
     if (blueprint) {
       const currentStock = blueprint.stock || 0;
       if (currentStock < item.dispatchedQty) {
@@ -2281,7 +2348,8 @@ function handleCreateDispatchSubmit(e) {
 
   // Deduct from Finished Goods Stock
   dispatchedItems.forEach(item => {
-    const blueprint = state.templatesCatalog.find(t => t.id === item.id);
+    const blueprint = state.templatesCatalog.find(t => t.id === item.id) ||
+                      state.templatesCatalog.find(t => t.name.toLowerCase() === item.name.toLowerCase());
     if (blueprint) {
       blueprint.stock = (blueprint.stock || 0) - item.dispatchedQty;
     }
@@ -2479,7 +2547,8 @@ function openPrintPreviewForMultipleDispatches(dispatchIds) {
       // Backwards-compatibility resolver for old dispatch logs missing poNumber
       let itemPo = it.poNumber || '';
       if (!itemPo && dispatch.estimateId) {
-        const est = state.savedEstimates.find(e => e.id === dispatch.estimateId);
+        const estIdList = dispatch.estimateId.split(',');
+        const est = state.savedEstimates.find(e => estIdList.includes(e.id));
         if (est && est.parts) {
           const part = est.parts.find(p => p.id === it.id);
           if (part) {
@@ -2516,7 +2585,8 @@ function openPrintPreviewForMultipleDispatches(dispatchIds) {
     const uniquePos = [...new Set(dispatch.items.map(it => {
       let itemPo = it.poNumber || '';
       if (!itemPo && dispatch.estimateId) {
-        const est = state.savedEstimates.find(e => e.id === dispatch.estimateId);
+        const estIdList = dispatch.estimateId.split(',');
+        const est = state.savedEstimates.find(e => estIdList.includes(e.id));
         if (est && est.parts) {
           const part = est.parts.find(p => p.id === it.id);
           if (part) {
@@ -3941,9 +4011,13 @@ document.addEventListener('DOMContentLoaded', () => {
     openDispatchBtn.addEventListener('click', openCreateDispatchModal);
   }
 
-  const dispatchEstSelect = document.getElementById('dispatch-estimate-select');
-  if (dispatchEstSelect) {
-    dispatchEstSelect.addEventListener('change', handleDispatchEstimateChange);
+  const dispatchEstContainer = document.getElementById('dispatch-estimates-container');
+  if (dispatchEstContainer) {
+    dispatchEstContainer.addEventListener('change', (e) => {
+      if (e.target.classList.contains('dispatch-est-checkbox')) {
+        handleDispatchEstimateChange();
+      }
+    });
   }
 
   const createDispatchForm = document.getElementById('create-dispatch-form');
