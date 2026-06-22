@@ -2412,7 +2412,7 @@ function handleCreateDispatchSubmit(e) {
   });
 
   if (validationErrors.length > 0) {
-    alert(validationErrors.join('\n\n---\n\n'));
+    alert(validationErrors[0]);
     return; // Do not go forward!
   }
 
