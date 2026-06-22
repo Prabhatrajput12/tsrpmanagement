@@ -382,15 +382,16 @@ function convertWeight(amount, fromUnit, toUnit) {
     ounces: 28.349523
   };
 
-  const fromFactor = toGrams[from] || 1;
-  
-  let toFactor = 1;
-  for (const key in toGrams) {
-    if (to.includes(key)) {
-      toFactor = toGrams[key];
-      break;
-    }
-  }
+  const getFactor = (unit) => {
+    if (toGrams[unit] !== undefined) return toGrams[unit];
+    const matchedKey = Object.keys(toGrams)
+      .filter(key => unit.includes(key))
+      .sort((a, b) => b.length - a.length)[0];
+    return matchedKey ? toGrams[matchedKey] : 1;
+  };
+
+  const fromFactor = getFactor(from);
+  const toFactor = getFactor(to);
 
   const valueInGrams = amount * fromFactor;
   return valueInGrams / toFactor;
