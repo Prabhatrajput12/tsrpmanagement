@@ -4448,43 +4448,59 @@ function playMicSound(type) {
     const now = micAudioCtx.currentTime;
     
     if (type === 'start') {
-      // Friendly rising chime (C5 -> E5)
-      const osc = micAudioCtx.createOscillator();
-      const gainNode = micAudioCtx.createGain();
-      
-      osc.type = 'sine';
-      osc.connect(gainNode);
-      gainNode.connect(micAudioCtx.destination);
-      
-      osc.frequency.setValueAtTime(523.25, now); // C5
-      osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
-      
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(0.12, now + 0.03);
-      gainNode.gain.setValueAtTime(0.12, now + 0.15);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      
-      osc.start(now);
-      osc.stop(now + 0.3);
+      // Warm, high-end double chime (G5 and C6 arpeggio with triangle waves)
+      const notes = [783.99, 1046.50]; // G5, C6
+      notes.forEach((freq, idx) => {
+        const timeOffset = idx * 0.08;
+        const osc = micAudioCtx.createOscillator();
+        const gainNode = micAudioCtx.createGain();
+        const filter = micAudioCtx.createBiquadFilter();
+        
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + timeOffset);
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1200, now + timeOffset);
+        
+        osc.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(micAudioCtx.destination);
+        
+        // Warm volume envelope
+        gainNode.gain.setValueAtTime(0, now + timeOffset);
+        gainNode.gain.linearRampToValueAtTime(0.08, now + timeOffset + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + timeOffset + 0.25);
+        
+        osc.start(now + timeOffset);
+        osc.stop(now + timeOffset + 0.25);
+      });
     } else if (type === 'stop') {
-      // Pleasant falling chime (E5 -> C5)
-      const osc = micAudioCtx.createOscillator();
-      const gainNode = micAudioCtx.createGain();
-      
-      osc.type = 'sine';
-      osc.connect(gainNode);
-      gainNode.connect(micAudioCtx.destination);
-      
-      osc.frequency.setValueAtTime(659.25, now); // E5
-      osc.frequency.setValueAtTime(523.25, now + 0.08); // C5
-      
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(0.12, now + 0.03);
-      gainNode.gain.setValueAtTime(0.12, now + 0.15);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      
-      osc.start(now);
-      osc.stop(now + 0.3);
+      // Gentle, cozy double tap (C6 and G5 descending)
+      const notes = [1046.50, 783.99]; // C6, G5
+      notes.forEach((freq, idx) => {
+        const timeOffset = idx * 0.08;
+        const osc = micAudioCtx.createOscillator();
+        const gainNode = micAudioCtx.createGain();
+        const filter = micAudioCtx.createBiquadFilter();
+        
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + timeOffset);
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1000, now + timeOffset);
+        
+        osc.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(micAudioCtx.destination);
+        
+        // Soft volume envelope
+        gainNode.gain.setValueAtTime(0, now + timeOffset);
+        gainNode.gain.linearRampToValueAtTime(0.06, now + timeOffset + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + timeOffset + 0.2);
+        
+        osc.start(now + timeOffset);
+        osc.stop(now + timeOffset + 0.2);
+      });
     }
   } catch (e) {
     console.warn("Audio synthesis failed:", e);
