@@ -4438,8 +4438,12 @@ function switchTab(tabId) {
 function initVoiceSearch() {
   const voiceBtn = document.getElementById('voice-search-btn');
   const searchInput = document.getElementById('module-search');
+  const voiceModal = document.getElementById('voice-search-modal');
+  const voiceCloseBtn = document.getElementById('voice-close-btn');
+  const voiceStatusText = document.getElementById('voice-status-text');
+  const voiceTranscriptPreview = document.getElementById('voice-transcript-preview');
   
-  if (!voiceBtn || !searchInput) return;
+  if (!voiceBtn || !searchInput || !voiceModal) return;
   
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
@@ -4450,44 +4454,111 @@ function initVoiceSearch() {
   const recognition = new SpeechRecognition();
   recognition.continuous = false;
   recognition.lang = 'en-US';
-  recognition.interimResults = false;
+  recognition.interimResults = true; // Show interim text as user speaks
   recognition.maxAlternatives = 1;
   
+  let isListening = false;
+  
   voiceBtn.addEventListener('click', () => {
-    if (voiceBtn.classList.contains('listening')) {
-      recognition.stop();
-    } else {
-      recognition.start();
+    openVoiceModal();
+  });
+  
+  if (voiceCloseBtn) {
+    voiceCloseBtn.addEventListener('click', () => {
+      closeVoiceModal();
+    });
+  }
+  
+  // Close if clicking outside the card
+  voiceModal.addEventListener('click', (e) => {
+    if (e.target === voiceModal) {
+      closeVoiceModal();
     }
   });
   
+  function openVoiceModal() {
+    voiceModal.classList.add('active');
+    isListening = true;
+    voiceStatusText.innerText = "Listening... Speak now";
+    voiceStatusText.style.color = "var(--text-primary)";
+    voiceTranscriptPreview.innerText = '"Say something..."';
+    
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error("Failed to start speech recognition:", e);
+    }
+  }
+  
+  function closeVoiceModal() {
+    isListening = false;
+    voiceModal.classList.remove('active');
+    try {
+      recognition.stop();
+    } catch (e) {}
+  }
+  
   recognition.onstart = () => {
-    voiceBtn.classList.add('listening');
-    voiceBtn.title = "Listening... Speak now";
-    searchInput.placeholder = "Listening...";
+    console.log("Speech recognition active");
   };
   
   recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    const cleanedText = transcript.trim().replace(/\.$/, '');
-    searchInput.value = cleanedText;
-    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    let interimTranscript = '';
+    let finalTranscript = '';
+    
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript;
+      } else {
+        interimTranscript += event.results[i][0].transcript;
+      }
+    }
+    
+    const previewText = finalTranscript || interimTranscript;
+    if (previewText) {
+      voiceTranscriptPreview.innerText = `"${previewText}"`;
+    }
+    
+    if (finalTranscript) {
+      const cleanedText = finalTranscript.trim().replace(/\.$/, '');
+      searchInput.value = cleanedText;
+      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      
+      voiceStatusText.innerText = "Captured!";
+      voiceStatusText.style.color = "var(--color-success)";
+      
+      // Auto close after 800ms
+      setTimeout(() => {
+        closeVoiceModal();
+      }, 800);
+    }
   };
   
   recognition.onerror = (event) => {
     console.error("Speech recognition error:", event.error);
-    stopListening();
+    if (event.error === 'not-allowed') {
+      voiceStatusText.innerText = "Permission Denied";
+      voiceStatusText.style.color = "var(--color-danger)";
+      voiceTranscriptPreview.innerText = "Please enable microphone permission in your browser.";
+    } else {
+      voiceStatusText.innerText = "Error Occurred";
+      voiceStatusText.style.color = "var(--color-danger)";
+      voiceTranscriptPreview.innerText = `Error: ${event.error}`;
+    }
+    
+    setTimeout(() => {
+      if (isListening) closeVoiceModal();
+    }, 2500);
   };
   
   recognition.onend = () => {
-    stopListening();
+    // If it stopped but user didn't cancel and no result was captured, close it
+    setTimeout(() => {
+      if (isListening) {
+        closeVoiceModal();
+      }
+    }, 1500);
   };
-  
-  function stopListening() {
-    voiceBtn.classList.remove('listening');
-    voiceBtn.title = "Voice Search";
-    searchInput.placeholder = "Search database...";
-  }
 }
 
 // --- Core Event Listeners & Bootstrapping ---

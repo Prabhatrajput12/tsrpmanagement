@@ -2193,10 +2193,220 @@ a:hover {
   }
 }
 
-.dispatch-est-checkbox-item {
-  transition: background-color var(--transition-fast);
-}
 .dispatch-est-checkbox-item:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+
+/* Voice Search Modal Overlay */
+.voice-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(8, 8, 16, 0.7);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.voice-modal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.voice-modal-card {
+  background: rgba(20, 20, 36, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  width: 90%;
+  max-width: 400px;
+  padding: 40px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 30px rgba(99, 102, 241, 0.1);
+  text-align: center;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: scale(0.9) translateY(20px);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.voice-modal-overlay.active .voice-modal-card {
+  transform: scale(1) translateY(0);
+}
+
+[data-theme="light"] .voice-modal-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1), 0 0 30px rgba(99, 102, 241, 0.05);
+}
+
+.voice-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.25s ease;
+}
+
+.voice-close-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  transform: rotate(90deg);
+}
+
+[data-theme="light"] .voice-close-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Pulsing Mic Circle and Ripple Rings */
+.voice-mic-container {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.voice-mic-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+  z-index: 2;
+  position: relative;
+}
+
+.voice-mic-circle svg {
+  width: 36px;
+  height: 36px;
+  stroke-width: 2.2;
+}
+
+.voice-pulse-ring {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.15);
+  z-index: 1;
+  animation: micRingPulse 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+  transform-origin: center;
+}
+
+.voice-pulse-ring.ring-1 {
+  animation-delay: 0s;
+}
+
+.voice-pulse-ring.ring-2 {
+  animation-delay: 0.6s;
+}
+
+.voice-pulse-ring.ring-3 {
+  animation-delay: 1.2s;
+}
+
+@keyframes micRingPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* Voice Waveform Bars */
+.voice-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 40px;
+  margin-bottom: 24px;
+}
+
+.wave-bar {
+  width: 3px;
+  height: 8px;
+  background: var(--accent-primary);
+  border-radius: 2px;
+  animation: wavePulse 1.2s ease-in-out infinite;
+  transition: background 0.3s ease;
+}
+
+/* Alternate colors and animation delay for bars */
+.wave-bar.bar-1 { animation-delay: 0.1s; height: 12px; }
+.wave-bar.bar-2 { animation-delay: 0.3s; height: 24px; background-color: #7c4dff; }
+.wave-bar.bar-3 { animation-delay: 0.5s; height: 16px; }
+.wave-bar.bar-4 { animation-delay: 0.2s; height: 28px; background-color: var(--accent-secondary); }
+.wave-bar.bar-5 { animation-delay: 0.4s; height: 32px; background-color: #8b5cf6; }
+.wave-bar.bar-6 { animation-delay: 0.6s; height: 20px; }
+.wave-bar.bar-7 { animation-delay: 0.1s; height: 24px; background-color: var(--accent-secondary); }
+.wave-bar.bar-8 { animation-delay: 0.3s; height: 12px; }
+.wave-bar.bar-9 { animation-delay: 0.5s; height: 8px; }
+
+@keyframes wavePulse {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(2.2);
+  }
+}
+
+/* Text and preview elements */
+.voice-modal-status {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+
+.voice-modal-transcript {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  max-width: 300px;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--border-color);
+  padding: 12px 18px;
+  border-radius: 12px;
+  word-break: break-word;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-theme="light"] .voice-modal-transcript {
+  background: rgba(0, 0, 0, 0.02);
 }
 

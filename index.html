@@ -1006,6 +1006,44 @@ create policy "Allow all users to manage dispatches" on public.dispatches for al
     </div>
   </div>
 
+  <!-- Voice Search Modal Overlay -->
+  <div id="voice-search-modal" class="voice-modal-overlay">
+    <div class="voice-modal-card">
+      <button class="voice-close-btn" id="voice-close-btn" title="Cancel">&times;</button>
+      
+      <!-- Pulsing Rings -->
+      <div class="voice-mic-container">
+        <div class="voice-pulse-ring ring-1"></div>
+        <div class="voice-pulse-ring ring-2"></div>
+        <div class="voice-pulse-ring ring-3"></div>
+        <div class="voice-mic-circle">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+        </div>
+      </div>
+      
+      <!-- Voice Waveform Animation -->
+      <div class="voice-waveform" id="voice-waveform">
+        <div class="wave-bar bar-1"></div>
+        <div class="wave-bar bar-2"></div>
+        <div class="wave-bar bar-3"></div>
+        <div class="wave-bar bar-4"></div>
+        <div class="wave-bar bar-5"></div>
+        <div class="wave-bar bar-6"></div>
+        <div class="wave-bar bar-7"></div>
+        <div class="wave-bar bar-8"></div>
+        <div class="wave-bar bar-9"></div>
+      </div>
+      
+      <div class="voice-modal-status" id="voice-status-text">Listening... Speak now</div>
+      <div class="voice-modal-transcript" id="voice-transcript-preview">"Say something..."</div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin></script>
   <script src="app.js"></script>
 </body>
