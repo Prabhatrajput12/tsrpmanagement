@@ -409,6 +409,7 @@ function calculateActiveEstimate() {
     if (catalogItem) {
       item.stock = catalogItem.stock;
       item.minStock = catalogItem.minStock;
+      item.unit = catalogItem.unit || item.unit; // Force alignment with inventory catalog unit
     }
     const compWeight = parseFloat(item.componentWeight) || 0;
     const runWeight = parseFloat(item.runnerWeight) || 0;
@@ -3178,7 +3179,7 @@ function loadTemplateRecipe(templateId) {
       componentWeight: m.componentWeight || 0,
       runnerWeight: m.runnerWeight || 0,
       weightUnit: m.weightUnit || 'g',
-      unit: m.unit,
+      unit: catalogItem.unit || m.unit || 'kg', // Prioritize inventory catalog unit
       unitCost: m.cost,
       stock: catalogItem.stock || 0,
       minStock: catalogItem.minStock || 0
