@@ -159,36 +159,152 @@
           </div>
         </div>
 
-        <!-- Charts Grid -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-bottom: 28px;">
-          <div class="card" style="margin-bottom: 0;">
-            <div class="card-title">
-              <span>Live Material Stock Levels</span>
-              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Real-time stock vs. min threshold limit</span>
+        <!-- Charts Carousel Container (Smooth Scroll Horizontal Viewport) -->
+        <div class="charts-carousel-wrapper" style="position: relative; margin-bottom: 28px; width: 100%;">
+          <style>
+            .charts-slider-container {
+              display: flex;
+              overflow-x: auto;
+              gap: 24px;
+              scroll-snap-type: x mandatory;
+              scroll-behavior: smooth;
+              -webkit-overflow-scrolling: touch;
+              padding: 8px 4px;
+              scrollbar-width: none; /* Firefox */
+              position: relative;
+            }
+            .charts-slider-container::-webkit-scrollbar {
+              display: none; /* Chrome, Safari, Opera */
+            }
+            .chart-slide-card {
+              flex: 0 0 100%;
+              scroll-snap-align: start;
+              box-sizing: border-box;
+              min-width: 0;
+              margin-bottom: 0 !important;
+            }
+            .carousel-dots-nav {
+              display: flex;
+              justify-content: center;
+              gap: 8px;
+              margin-top: 14px;
+            }
+            .carousel-dot-btn {
+              width: 10px;
+              height: 10px;
+              border-radius: 50%;
+              background: rgba(168, 85, 247, 0.2);
+              border: 1px solid rgba(168, 85, 247, 0.4);
+              cursor: pointer;
+              transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+              padding: 0;
+            }
+            .carousel-dot-btn.active {
+              background: #a855f7;
+              width: 24px;
+              border-radius: 5px;
+            }
+            .carousel-nav-btn {
+              position: absolute;
+              top: 50%;
+              transform: translateY(-50%);
+              width: 38px;
+              height: 38px;
+              border-radius: 50%;
+              background: var(--bg-card, #1e1e38);
+              border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+              color: var(--text-primary, #ffffff);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              cursor: pointer;
+              z-index: 10;
+              opacity: 0;
+              visibility: hidden;
+              transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+              padding: 0;
+            }
+            .charts-carousel-wrapper:hover .carousel-nav-btn {
+              opacity: 0.7;
+              visibility: visible;
+            }
+            .carousel-nav-btn:hover {
+              opacity: 1 !important;
+              background: var(--accent-primary, #6366f1);
+              color: white;
+              border-color: var(--accent-primary, #6366f1);
+              box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+            }
+            .carousel-nav-btn.prev-btn {
+              left: -19px;
+            }
+            .carousel-nav-btn.next-btn {
+              right: -19px;
+            }
+            /* Adjust position slightly on small screens so arrows stay inside if needed */
+            @media (max-width: 768px) {
+              .carousel-nav-btn.prev-btn {
+                left: 5px;
+              }
+              .carousel-nav-btn.next-btn {
+                right: 5px;
+              }
+              .carousel-nav-btn {
+                opacity: 0.6;
+                visibility: visible;
+              }
+            }
+          </style>
+          
+          <!-- Left & Right Arrow Buttons -->
+          <button class="carousel-nav-btn prev-btn" id="charts-prev-btn" aria-label="Previous Chart">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <button class="carousel-nav-btn next-btn" id="charts-next-btn" aria-label="Next Chart">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+
+          <div id="charts-slider-container" class="charts-slider-container">
+            <!-- Slide 1: Live Material Stock Levels -->
+            <div class="card chart-slide-card" id="slide-stock-card">
+              <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <span>Live Material Stock Levels</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Real-time stock vs. min threshold limit</span>
+              </div>
+              <!-- Injected by JS -->
+              <div id="dashboard-stock-chart" style="display: flex; flex-direction: column; min-height: 250px; justify-content: center; position: relative;">
+              </div>
             </div>
-            <!-- Injected by JS -->
-            <div id="dashboard-stock-chart" style="display: flex; flex-direction: column; min-height: 250px; justify-content: center;">
+            
+            <!-- Slide 2: Daily Parts Production Output -->
+            <div class="card dashboard-chart-card prod-chart chart-slide-card" id="slide-production-card">
+              <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <span>Daily Parts Production Output</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Total parts manufactured per day (last 7 days)</span>
+              </div>
+              <!-- Injected by JS -->
+              <div id="dashboard-production-chart" style="display: flex; flex-direction: column; min-height: 250px; justify-content: center; position: relative;">
+              </div>
+            </div>
+
+            <!-- Slide 3: Daily Parts Dispatch Output -->
+            <div class="card dashboard-chart-card disp-chart chart-slide-card" id="slide-dispatch-card">
+              <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <span>Daily Parts Dispatch Output</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Total parts dispatched per day (last 7 days)</span>
+              </div>
+              <!-- Injected by JS -->
+              <div id="dashboard-dispatch-chart" style="display: flex; flex-direction: column; min-height: 250px; justify-content: center; position: relative;">
+              </div>
             </div>
           </div>
           
-          <div class="card dashboard-chart-card prod-chart" style="margin-bottom: 0;">
-            <div class="card-title">
-              <span>Daily Parts Production Output</span>
-              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Total parts manufactured per day (last 7 days)</span>
-            </div>
-            <!-- Injected by JS -->
-            <div id="dashboard-production-chart" style="display: flex; flex-direction: column; min-height: 250px; justify-content: center; position: relative;">
-            </div>
-          </div>
-
-          <div class="card dashboard-chart-card disp-chart" style="margin-bottom: 0;">
-            <div class="card-title">
-              <span>Daily Parts Dispatch Output</span>
-              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; text-transform: none;">Total parts dispatched per day (last 7 days)</span>
-            </div>
-            <!-- Injected by JS -->
-            <div id="dashboard-dispatch-chart" style="display: flex; flex-direction: column; min-height: 250px; justify-content: center; position: relative;">
-            </div>
+          <!-- Dots Indicator Navigation -->
+          <div class="carousel-dots-nav" id="charts-dots-nav">
+            <button class="carousel-dot-btn active" data-slide-index="0" aria-label="Go to Stock Levels Chart"></button>
+            <button class="carousel-dot-btn" data-slide-index="1" aria-label="Go to Production Output Chart"></button>
+            <button class="carousel-dot-btn" data-slide-index="2" aria-label="Go to Dispatch Output Chart"></button>
           </div>
         </div>
       </section>

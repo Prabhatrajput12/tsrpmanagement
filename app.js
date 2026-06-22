@@ -1005,35 +1005,7 @@ function renderDashboardCharts() {
   if (filteredMaterials.length === 0) {
     stockContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-style: italic; padding: 40px;">No material records found.</div>`;
   } else {
-    let barsHtml = '';
-    filteredMaterials.forEach(m => {
-      // Calibrate max range for bar scaling
-      const maxRange = Math.max(m.minStock * 3, m.stock, 20);
-      const stockPct = (m.stock / maxRange) * 100;
-      const minStockPct = (m.minStock / maxRange) * 100;
-      const isLow = m.stock < m.minStock;
-      
-      const barFillStyle = isLow 
-        ? 'background: linear-gradient(90deg, #f87171 0%, #ef4444 100%);' 
-        : 'background: linear-gradient(90deg, #6366f1 0%, #a855f7 100%);';
-
-      barsHtml += `
-        <div class="live-bar-row">
-          <div class="live-bar-info">
-            <span style="font-weight: 600;">${m.name}</span>
-            <span style="${isLow ? 'color: var(--color-danger); font-weight: 700;' : ''}">
-              ${m.stock.toFixed(1)} / ${m.minStock} ${m.unit}
-            </span>
-          </div>
-          <div class="live-bar-track">
-            <!-- Alert threshold marker line -->
-            <div style="position: absolute; left: ${minStockPct}%; top: 0; bottom: 0; width: 2px; background: rgba(239, 68, 68, 0.4); z-index: 5;" title="Min Alert Level"></div>
-            <div class="live-bar-fill" style="width: ${stockPct}%; ${barFillStyle}"></div>
-          </div>
-        </div>
-      `;
-    });
-    stockContainer.innerHTML = `<div style="display: flex; flex-direction: column; gap: 4px; padding: 10px 0;">${barsHtml}</div>`;
+    stockContainer.innerHTML = generateStockBarChartSvg(filteredMaterials);
   }
 
   // 3. Render Daily Production Output Area/Line SVG Chart
@@ -1265,6 +1237,216 @@ function generateAreaChartSvg(data, strokeColor = '#a855f7', fillColor = '#a855f
       ${columnsHtml}
     </svg>
   `;
+}
+
+// Helper to draw a beautiful SVG horizontal bar chart for stock levels
+function generateStockBarChartSvg(materials) {
+  const rowHeight = 45;
+  const paddingTop = 15;
+  const paddingBottom = 30;
+  const paddingLeft = 100; // Allow enough space for material names
+  const paddingRight = 20;
+  
+  const height = paddingTop + paddingBottom + (materials.length * rowHeight);
+  const width = 600;
+  const plotWidth = width - paddingLeft - paddingRight;
+  
+  // Find max value to calibrate X axis
+  const maxVal = Math.max(...materials.map(m => Math.max(m.stock, m.minStock)), 20);
+  const maxAxisVal = Math.ceil(maxVal * 1.1 / 10) * 10;
+  
+  let gridLines = '';
+  const divisions = 5;
+  for (let i = 0; i <= divisions; i++) {
+    const xVal = paddingLeft + (i / divisions) * plotWidth;
+    const qtyVal = Math.round((i / divisions) * maxAxisVal);
+    gridLines += `
+      <line x1="${xVal}" y1="${paddingTop}" x2="${xVal}" y2="${height - paddingBottom}" stroke="rgba(255,255,255,0.06)" class="grid-line" stroke-dasharray="3,3" />
+      <text x="${xVal}" y="${height - 10}" fill="var(--text-secondary)" font-size="9" text-anchor="middle">${qtyVal}</text>
+    `;
+  }
+  
+  let barsHtml = '';
+  materials.forEach((m, i) => {
+    const barY = paddingTop + i * rowHeight + (rowHeight - 16) / 2; // 16px thickness
+    const stockWidth = Math.max(4, (m.stock / maxAxisVal) * plotWidth);
+    const minStockX = paddingLeft + (m.minStock / maxAxisVal) * plotWidth;
+    
+    const isLow = m.stock < m.minStock;
+    const strokeColor = isLow ? '#ef4444' : '#a855f7';
+    const fillColor = isLow ? '#f87171' : '#a855f7';
+    const gradId = `stock-bar-grad-${m.id || i}`;
+    
+    const tooltipX = Math.max(paddingLeft + 45, Math.min(width - paddingRight - 60, paddingLeft + stockWidth));
+    
+    barsHtml += `
+      <g class="chart-col-group" style="cursor: pointer;">
+        <!-- Hover background rectangle -->
+        <rect x="${paddingLeft - 90}" y="${paddingTop + i * rowHeight}" width="${plotWidth + 105}" height="${rowHeight}" 
+              fill="${fillColor}" opacity="0" class="chart-hover-rect" style="transition: opacity 0.2s;" />
+        
+        <!-- Y-Axis Label (Material Name) -->
+        <text x="${paddingLeft - 12}" y="${barY + 11}" fill="var(--text-primary)" font-size="10.5" font-weight="600" text-anchor="end">${m.name}</text>
+        
+        <!-- Stock Bar -->
+        <rect x="${paddingLeft}" y="${barY}" width="${stockWidth}" height="16" rx="8" fill="url(#${gradId})" />
+        
+        <!-- Min Stock Threshold Marker Pin -->
+        <line x1="${minStockX}" y1="${barY - 4}" x2="${minStockX}" y2="${barY + 20}" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" />
+        <circle cx="${minStockX}" cy="${barY - 4}" r="3.5" fill="#ef4444" />
+        
+        <!-- Floating Tooltip -->
+        <g class="chart-tooltip-bubble" style="pointer-events: none; opacity: 0; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));">
+          <rect x="${(tooltipX - 60)}" y="${(barY - 44)}" width="120" height="34" rx="5" fill="var(--bg-card, #ffffff)" stroke="${strokeColor}" stroke-width="1.5" />
+          <text x="${tooltipX}" y="${(barY - 30)}" fill="var(--text-primary)" font-size="9" font-weight="bold" text-anchor="middle">${m.name}</text>
+          <text x="${tooltipX}" y="${(barY - 18)}" fill="var(--text-secondary)" font-size="8" text-anchor="middle">Stock: ${m.stock.toFixed(1)} / Min: ${m.minStock} ${m.unit}</text>
+        </g>
+      </g>
+    `;
+  });
+  
+  // Combine everything and define gradients in SVG
+  let gradientsHtml = '';
+  materials.forEach((m, i) => {
+    const isLow = m.stock < m.minStock;
+    const gradId = `stock-bar-grad-${m.id || i}`;
+    const startColor = isLow ? '#ef4444' : '#6366f1';
+    const endColor = isLow ? '#f87171' : '#a855f7';
+    gradientsHtml += `
+      <linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="${startColor}" />
+        <stop offset="100%" stop-color="${endColor}" />
+      </linearGradient>
+    `;
+  });
+  
+  return `
+    <svg viewBox="0 0 ${width} ${height}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="overflow: visible;">
+      <defs>
+        ${gradientsHtml}
+        <style>
+          .chart-col-group {
+            pointer-events: all;
+          }
+          .chart-col-group:hover .chart-hover-rect {
+            opacity: 0.04 !important;
+          }
+          .chart-col-group:hover .chart-tooltip-bubble {
+            opacity: 1 !important;
+          }
+          .chart-tooltip-bubble {
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+          .chart-tooltip-bubble rect {
+            fill: #1e1e38 !important;
+          }
+          [data-theme="light"] .chart-tooltip-bubble rect {
+            fill: #ffffff !important;
+          }
+          .chart-tooltip-bubble text {
+            fill: var(--text-primary, #ffffff) !important;
+          }
+          [data-theme="light"] .chart-tooltip-bubble text {
+            fill: var(--text-primary, #000000) !important;
+          }
+          .grid-line {
+            stroke: rgba(255,255,255,0.06);
+          }
+          [data-theme="light"] .grid-line {
+            stroke: rgba(0,0,0,0.06);
+          }
+        </style>
+      </defs>
+      ${gridLines}
+      ${barsHtml}
+    </svg>
+  `;
+}
+
+// Carousel Navigation logic for the stacked/scrolled charts
+function initChartsCarousel() {
+  const slider = document.getElementById('charts-slider-container');
+  const dots = document.querySelectorAll('.carousel-dot-btn');
+  const prevBtn = document.getElementById('charts-prev-btn');
+  const nextBtn = document.getElementById('charts-next-btn');
+  
+  if (!slider) return;
+  
+  // Update dots active status on scroll
+  const handleScroll = () => {
+    const slideWidth = slider.getBoundingClientRect().width;
+    if (slideWidth <= 0) return;
+    const scrollIndex = Math.round(slider.scrollLeft / slideWidth);
+    
+    dots.forEach((dot, idx) => {
+      if (idx === scrollIndex) {
+        dot.classList.add('active');
+      } else {
+        dot.classList.remove('active');
+      }
+    });
+    
+    // Hide/show arrows based on scroll position
+    if (prevBtn && nextBtn) {
+      if (slider.scrollLeft <= 10) {
+        prevBtn.style.opacity = '0';
+        prevBtn.style.pointerEvents = 'none';
+      } else {
+        prevBtn.style.opacity = '0.7';
+        prevBtn.style.pointerEvents = 'auto';
+      }
+      
+      const maxScroll = slider.scrollWidth - slideWidth - 10;
+      if (slider.scrollLeft >= maxScroll) {
+        nextBtn.style.opacity = '0';
+        nextBtn.style.pointerEvents = 'none';
+      } else {
+        nextBtn.style.opacity = '0.7';
+        nextBtn.style.pointerEvents = 'auto';
+      }
+    }
+  };
+
+  slider.removeEventListener('scroll', handleScroll);
+  slider.addEventListener('scroll', handleScroll);
+  
+  // Dot clicks
+  dots.forEach(dot => {
+    dot.onclick = () => {
+      const idx = parseInt(dot.getAttribute('data-slide-index'));
+      const slideWidth = slider.getBoundingClientRect().width;
+      slider.scrollTo({
+        left: slideWidth * idx,
+        behavior: 'smooth'
+      });
+    };
+  });
+  
+  // Arrow clicks
+  if (prevBtn) {
+    prevBtn.onclick = () => {
+      const slideWidth = slider.getBoundingClientRect().width;
+      slider.scrollTo({
+        left: Math.max(0, slider.scrollLeft - slideWidth),
+        behavior: 'smooth'
+      });
+    };
+  }
+  
+  if (nextBtn) {
+    nextBtn.onclick = () => {
+      const slideWidth = slider.getBoundingClientRect().width;
+      slider.scrollTo({
+        left: Math.min(slider.scrollWidth - slideWidth, slider.scrollLeft + slideWidth),
+        behavior: 'smooth'
+      });
+    };
+  }
+  
+  // Run initial trigger to configure button opacities
+  handleScroll();
 }
 
 // --- 2. Parts Tab Blueprint Builder ---
@@ -4147,6 +4329,7 @@ function switchTab(tabId) {
   // Trigger tab builders
   if (tabId === 'dashboard') {
     renderDashboardCharts();
+    initChartsCarousel();
   } else if (tabId === 'parts') {
     renderPartsTab();
   } else if (tabId === 'inventory') {
@@ -4168,6 +4351,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initial load
   renderDashboardCharts();
+  initChartsCarousel();
 
   // Tab switching
   document.querySelectorAll('.nav-item').forEach(item => {
