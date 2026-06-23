@@ -59,19 +59,106 @@ if (supabaseUrl && supabaseKey) {
 
 // --- User Authentication & Security States ---
 let authMode = 'login'; // 'login' or 'signup' for Supabase Auth mode
+let failedLoginAttempts = 0;
+let lockoutExpiration = 0;
 
 function initLocalAuth() {
-  if (!localStorage.getItem('ws_local_username')) {
-    localStorage.setItem('ws_local_username', 'admin');
+  let users = [];
+  const storedUsers = localStorage.getItem('tsrps_users');
+  if (storedUsers) {
+    try {
+      users = JSON.parse(storedUsers);
+    } catch (e) {
+      users = [];
+    }
   }
-  if (!localStorage.getItem('ws_master_password')) {
-    localStorage.setItem('ws_master_password', 'admin123');
+  
+  const hasJeetu = users.some(u => u.username.toLowerCase() === 'jeetu@tsrp.com');
+  if (!hasJeetu) {
+    // Add default admin account for user
+    users.push({
+      username: 'jeetu@tsrp.com',
+      password: '098890',
+      role: 'admin',
+      status: 'approved',
+      question: 'What was the name of your first school?',
+      answer: 'standard',
+      createdAt: new Date().toISOString()
+    });
+    
+    // Also migrate legacy admin if empty
+    if (users.length === 1) {
+      const legacyUsername = localStorage.getItem('ws_local_username') || 'admin';
+      const legacyPassword = localStorage.getItem('ws_master_password') || 'admin123';
+      const legacyQuestion = localStorage.getItem('ws_security_question') || 'What was the name of your first school?';
+      const legacyAnswer = localStorage.getItem('ws_security_answer') || 'standard';
+      
+      if (legacyUsername.toLowerCase() !== 'jeetu@tsrp.com') {
+        users.push({
+          username: legacyUsername.toLowerCase(),
+          password: legacyPassword,
+          role: 'admin',
+          status: 'approved',
+          question: legacyQuestion,
+          answer: legacyAnswer,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+    
+    localStorage.setItem('tsrps_users', JSON.stringify(users));
   }
-  if (!localStorage.getItem('ws_security_question')) {
-    localStorage.setItem('ws_security_question', 'What was the name of your first school?');
-  }
-  if (!localStorage.getItem('ws_security_answer')) {
-    localStorage.setItem('ws_security_answer', 'standard');
+}
+
+async function checkUserPermission(email) {
+  if (!supabaseClient) return { approved: true, role: 'user' };
+  try {
+    let { data, error } = await supabaseClient
+      .from('user_permissions')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+      
+    if (error) {
+      console.error("Error checking user permissions:", error);
+      return { approved: false, role: 'user', error: error.message };
+    }
+    
+    if (!data) {
+      // First user registered via Supabase becomes admin, others become pending users
+      const { count, error: countErr } = await supabaseClient
+        .from('user_permissions')
+        .select('*', { count: 'exact', head: true });
+        
+      const isFirst = !countErr && count === 0;
+      const defaultRole = isFirst ? 'admin' : 'user';
+      const defaultStatus = isFirst ? 'approved' : 'pending';
+      
+      const { data: newRow, error: insertError } = await supabaseClient
+        .from('user_permissions')
+        .insert({
+          email: email.toLowerCase(),
+          role: defaultRole,
+          status: defaultStatus
+        })
+        .select()
+        .single();
+        
+      if (insertError) {
+        console.error("Error inserting default permission:", insertError);
+        return { approved: false, role: 'user' };
+      }
+      return { approved: defaultStatus === 'approved', role: defaultRole, status: defaultStatus };
+    }
+    
+    return {
+      approved: data.status === 'approved',
+      role: data.role,
+      status: data.status
+    };
+  } catch (err) {
+    console.error("Catch block in checkUserPermission:", err);
+    return { approved: false, role: 'user' };
   }
 }
 
@@ -103,11 +190,35 @@ async function initAuth() {
     try {
       const { data: { session } } = await supabaseClient.auth.getSession();
       if (session) {
-        state.isLoggedIn = true;
-        state.currentUser = session.user;
-        if (authOverlay) authOverlay.classList.remove('active');
-        if (authLogoutBtn) authLogoutBtn.style.display = 'block';
-        return true;
+        const permission = await checkUserPermission(session.user.email);
+        if (permission.approved) {
+          state.isLoggedIn = true;
+          state.currentUser = { ...session.user, role: permission.role };
+          if (authOverlay) authOverlay.classList.remove('active');
+          if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+          
+          const usersNavItem = document.getElementById('nav-item-users');
+          if (usersNavItem) {
+            usersNavItem.style.display = permission.role === 'admin' ? 'block' : 'none';
+          }
+          
+          await loadStateFromCloud();
+          setupRealtimeSync();
+          populateSelectors();
+          updateGlobalAlerts();
+          renderDashboardCharts();
+          return true;
+        } else {
+          state.isLoggedIn = false;
+          state.currentUser = null;
+          if (authOverlay) authOverlay.classList.add('active');
+          const errorEl = document.getElementById('auth-error-msg');
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = `Access denied. Your account is ${permission.status || 'pending'} approval.`;
+          }
+          await supabaseClient.auth.signOut();
+        }
       }
     } catch (e) {
       console.error("Error checking Supabase session:", e);
@@ -118,20 +229,30 @@ async function initAuth() {
     updateAuthDOM();
   } else {
     // Local Mode
-    if (authToggleLink) authToggleLink.style.display = 'none';
+    if (authToggleLink) authToggleLink.style.display = 'inline';
     if (authEmailGroup) authEmailGroup.style.display = 'none';
     if (authUsernameGroup) authUsernameGroup.style.display = 'block';
     const authUsernameInput = document.getElementById('auth-username');
     if (authUsernameInput) authUsernameInput.required = true;
     if (authPasswordLabel) authPasswordLabel.innerText = "Password";
-    if (authModeIndicator) authModeIndicator.innerText = "Local Database Lock";
+    if (authModeIndicator) authModeIndicator.innerText = "Secure System Access";
     if (securityUsernameGroup) securityUsernameGroup.style.display = 'block';
     
     const localSession = sessionStorage.getItem('ws_is_logged_in');
     if (localSession === 'true') {
       state.isLoggedIn = true;
+      try {
+        state.currentUser = JSON.parse(sessionStorage.getItem('ws_current_user')) || { username: 'admin', role: 'admin' };
+      } catch (e) {
+        state.currentUser = { username: 'admin', role: 'admin' };
+      }
       if (authOverlay) authOverlay.classList.remove('active');
       if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+      
+      const usersNavItem = document.getElementById('nav-item-users');
+      if (usersNavItem) {
+        usersNavItem.style.display = state.currentUser.role === 'admin' ? 'block' : 'none';
+      }
       return true;
     }
     
@@ -145,15 +266,32 @@ function updateAuthDOM() {
   const authModeIndicator = document.getElementById('auth-mode-indicator');
   const authSubmitBtn = document.getElementById('auth-submit-btn');
   const authToggleLink = document.getElementById('auth-toggle-mode-link');
+  const localSignupFields = document.getElementById('local-signup-fields');
   
-  if (authMode === 'login') {
-    if (authModeIndicator) authModeIndicator.innerText = "Cloud Database Lock";
-    if (authSubmitBtn) authSubmitBtn.innerText = "Unlock Dashboard";
-    if (authToggleLink) authToggleLink.innerText = "Create Account";
+  if (supabaseClient) {
+    if (localSignupFields) localSignupFields.style.display = 'none';
+    if (authMode === 'login') {
+      if (authModeIndicator) authModeIndicator.innerText = "Cloud Database Lock";
+      if (authSubmitBtn) authSubmitBtn.innerText = "Unlock Dashboard";
+      if (authToggleLink) authToggleLink.innerText = "Create Account";
+    } else {
+      if (authModeIndicator) authModeIndicator.innerText = "Create Cloud Account";
+      if (authSubmitBtn) authSubmitBtn.innerText = "Sign Up & Register";
+      if (authToggleLink) authToggleLink.innerText = "Sign In to Existing Account";
+    }
   } else {
-    if (authModeIndicator) authModeIndicator.innerText = "Create Cloud Account";
-    if (authSubmitBtn) authSubmitBtn.innerText = "Sign Up & Register";
-    if (authToggleLink) authToggleLink.innerText = "Sign In to Existing Account";
+    // Local Mode
+    if (authMode === 'login') {
+      if (authModeIndicator) authModeIndicator.innerText = "Secure System Access";
+      if (authSubmitBtn) authSubmitBtn.innerText = "Unlock Dashboard";
+      if (authToggleLink) authToggleLink.innerText = "Create Account";
+      if (localSignupFields) localSignupFields.style.display = 'none';
+    } else {
+      if (authModeIndicator) authModeIndicator.innerText = "Register Secure Account";
+      if (authSubmitBtn) authSubmitBtn.innerText = "Register Account";
+      if (authToggleLink) authToggleLink.innerText = "Sign In to Existing Account";
+      if (localSignupFields) localSignupFields.style.display = 'block';
+    }
   }
 }
 
@@ -256,8 +394,22 @@ function setupAuthStateListener() {
     
     if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
       if (session) {
+        const permission = await checkUserPermission(session.user.email);
+        if (!permission.approved) {
+          state.isLoggedIn = false;
+          state.currentUser = null;
+          if (authOverlay) authOverlay.classList.add('active');
+          const errorEl = document.getElementById('auth-error-msg');
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = `Access denied. Your account is ${permission.status || 'pending'} approval.`;
+          }
+          await supabaseClient.auth.signOut();
+          return;
+        }
+        
         state.isLoggedIn = true;
-        state.currentUser = session.user;
+        state.currentUser = { ...session.user, role: permission.role };
         
         // Hide password recovery/set forms if open
         const newPassForm = document.getElementById('auth-new-password-form');
@@ -266,6 +418,12 @@ function setupAuthStateListener() {
         if (newPassForm) newPassForm.style.display = 'none';
         if (recoveryForm) recoveryForm.style.display = 'none';
         if (loginForm) loginForm.style.display = 'block';
+        
+        // Show/hide User Manager navigation tab based on role
+        const usersNavItem = document.getElementById('nav-item-users');
+        if (usersNavItem) {
+          usersNavItem.style.display = permission.role === 'admin' ? 'block' : 'none';
+        }
         
         const playAnim = authOverlay && authOverlay.classList.contains('active');
         
@@ -294,6 +452,11 @@ function setupAuthStateListener() {
       state.currentUser = null;
       if (authOverlay) authOverlay.classList.add('active');
       if (authLogoutBtn) authLogoutBtn.style.display = 'none';
+      
+      const usersNavItem = document.getElementById('nav-item-users');
+      if (usersNavItem) {
+        usersNavItem.style.display = 'none';
+      }
       
       // Clear data states
       state.materialsCatalog = [];
@@ -345,9 +508,41 @@ async function handleLoginSubmit(e) {
     errorEl.innerText = '';
   }
   
+  if (lockoutExpiration && Date.now() < lockoutExpiration) {
+    const remainingSec = Math.ceil((lockoutExpiration - Date.now()) / 1000);
+    shakeCard(authCard);
+    if (errorEl) {
+      errorEl.style.display = 'block';
+      errorEl.innerText = `Too many failed attempts. Try again in ${remainingSec} seconds.`;
+    }
+    return;
+  }
+  
   if (supabaseClient) {
     if (authMode === 'login') {
       const { error } = await supabaseClient.auth.signInWithPassword({
+        email: emailVal,
+        password: passwordVal
+      });
+      if (error) {
+        failedLoginAttempts++;
+        shakeCard(authCard);
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          if (failedLoginAttempts >= 5) {
+            lockoutExpiration = Date.now() + 30000; // 30 seconds lockout
+            failedLoginAttempts = 0;
+            errorEl.innerText = "Too many failed attempts. Locked for 30 seconds.";
+          } else {
+            errorEl.innerText = `${error.message} (Attempts left: ${5 - failedLoginAttempts})`;
+          }
+        }
+      } else {
+        failedLoginAttempts = 0;
+        lockoutExpiration = 0;
+      }
+    } else {
+      const { error } = await supabaseClient.auth.signUp({
         email: emailVal,
         password: passwordVal
       });
@@ -357,53 +552,121 @@ async function handleLoginSubmit(e) {
           errorEl.style.display = 'block';
           errorEl.innerText = error.message;
         }
-      }
-    } else {
-      const { error } = await supabaseClient.auth.signUp({
-        email: emailVal,
-        password: passwordVal,
-        options: {
-          data: {
-            security_question: "What was the name of your first school?",
-            security_answer: "standard"
-          }
-        }
-      });
-      if (error) {
-        shakeCard(authCard);
-        if (errorEl) {
-          errorEl.style.display = 'block';
-          errorEl.innerText = error.message;
-        }
       } else {
-        alert("Registration initiated! If email confirmation is required, please check your email. Otherwise, you can log in now.");
+        alert("Registration initiated! Your cloud account is pending administrator approval.");
         authMode = 'login';
         updateAuthDOM();
       }
     }
   } else {
-    const savedUsername = localStorage.getItem('ws_local_username') || 'admin';
-    const masterPassword = localStorage.getItem('ws_master_password') || 'admin123';
-    if (usernameVal === savedUsername && passwordVal === masterPassword) {
-      sessionStorage.setItem('ws_is_logged_in', 'true');
-      state.isLoggedIn = true;
-      
-      triggerUnlockSequence(() => {
-        const authLogoutBtn = document.getElementById('auth-logout-btn');
-        if (authLogoutBtn) authLogoutBtn.style.display = 'block';
-        
-        // Load and refresh
-        loadStateFromStorage();
-        populateSelectors();
-        updateGlobalAlerts();
-        renderDashboardCharts();
-      });
-    } else {
-      shakeCard(authCard);
-      if (errorEl) {
-        errorEl.style.display = 'block';
-        errorEl.innerText = "Incorrect username or password.";
+    // Local Mode
+    if (authMode === 'login') {
+      let users = [];
+      try {
+        users = JSON.parse(localStorage.getItem('tsrps_users')) || [];
+      } catch (err) {
+        users = [];
       }
+      
+      const user = users.find(u => u.username.toLowerCase() === usernameVal.toLowerCase() && u.password === passwordVal);
+      if (user) {
+        failedLoginAttempts = 0;
+        lockoutExpiration = 0;
+        
+        if (user.status !== 'approved') {
+          shakeCard(authCard);
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = `Access denied. Your account status is: ${user.status || 'pending'}.`;
+          }
+          return;
+        }
+        
+        sessionStorage.setItem('ws_is_logged_in', 'true');
+        sessionStorage.setItem('ws_current_user', JSON.stringify(user));
+        state.isLoggedIn = true;
+        state.currentUser = user;
+        
+        const usersNavItem = document.getElementById('nav-item-users');
+        if (usersNavItem) {
+          usersNavItem.style.display = user.role === 'admin' ? 'block' : 'none';
+        }
+        
+        triggerUnlockSequence(() => {
+          const authLogoutBtn = document.getElementById('auth-logout-btn');
+          if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+          
+          loadStateFromStorage();
+          populateSelectors();
+          updateGlobalAlerts();
+          renderDashboardCharts();
+        });
+      } else {
+        failedLoginAttempts++;
+        shakeCard(authCard);
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          if (failedLoginAttempts >= 5) {
+            lockoutExpiration = Date.now() + 30000; // 30 seconds lockout
+            failedLoginAttempts = 0;
+            errorEl.innerText = "Too many failed attempts. Locked for 30 seconds.";
+          } else {
+            errorEl.innerText = `Incorrect username or password. (Attempts left: ${5 - failedLoginAttempts})`;
+          }
+        }
+      }
+    } else {
+      // Sign Up Local Mode
+      const securityQuestionVal = document.getElementById('auth-security-question').value;
+      const securityAnswerVal = document.getElementById('auth-security-answer').value.trim();
+      
+      if (!usernameVal || !passwordVal || !securityAnswerVal) {
+        shakeCard(authCard);
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "Please fill in all registration fields.";
+        }
+        return;
+      }
+      
+      let users = [];
+      try {
+        users = JSON.parse(localStorage.getItem('tsrps_users')) || [];
+      } catch (err) {
+        users = [];
+      }
+      
+      if (users.some(u => u.username.toLowerCase() === usernameVal.toLowerCase())) {
+        shakeCard(authCard);
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "Username already exists.";
+        }
+        return;
+      }
+      
+      const isFirst = users.length === 0;
+      const newUser = {
+        username: usernameVal.toLowerCase(),
+        password: passwordVal,
+        role: isFirst ? 'admin' : 'user',
+        status: isFirst ? 'approved' : 'pending',
+        question: securityQuestionVal,
+        answer: securityAnswerVal,
+        createdAt: new Date().toISOString()
+      };
+      
+      users.push(newUser);
+      localStorage.setItem('tsrps_users', JSON.stringify(users));
+      
+      if (isFirst) {
+        alert("Registration successful! As the first user, you are approved as Administrator.");
+      } else {
+        alert("Registration submitted successfully! Your account is pending administrator approval.");
+      }
+      
+      authMode = 'login';
+      updateAuthDOM();
     }
   }
 }
@@ -443,8 +706,14 @@ function openForgotPasswordFlow() {
     if (recoverySubmitBtn) recoverySubmitBtn.innerText = "Reset Password";
     
     if (questionDisplay) {
-      questionDisplay.value = localStorage.getItem('ws_security_question') || "What was the name of your first school?";
+      questionDisplay.value = "Enter username to display question.";
     }
+    const recoveryUsername = document.getElementById('recovery-username');
+    if (recoveryUsername) recoveryUsername.value = '';
+    const recoveryAnswer = document.getElementById('recovery-answer');
+    if (recoveryAnswer) recoveryAnswer.value = '';
+    const recoveryNewPass = document.getElementById('recovery-new-password');
+    if (recoveryNewPass) recoveryNewPass.value = '';
   }
 }
 
@@ -485,12 +754,14 @@ async function handleRecoverySubmit(e) {
       if (loginForm) loginForm.style.display = 'block';
     }
   } else {
+    const recoveryUsername = document.getElementById('recovery-username');
+    const usernameVal = recoveryUsername ? recoveryUsername.value.trim().toLowerCase() : '';
     const answerInput = document.getElementById('recovery-answer');
     const answerVal = answerInput ? answerInput.value.trim().toLowerCase() : '';
     const newPassInput = document.getElementById('recovery-new-password');
     const newPassVal = newPassInput ? newPassInput.value : '';
     
-    if (!answerVal || !newPassVal) {
+    if (!usernameVal || !answerVal || !newPassVal) {
       if (errorEl) {
         errorEl.style.display = 'block';
         errorEl.innerText = "Please fill in all recovery fields.";
@@ -498,29 +769,56 @@ async function handleRecoverySubmit(e) {
       return;
     }
     
-    const savedAnswer = (localStorage.getItem('ws_security_answer') || 'standard').toLowerCase().trim();
-    if (answerVal === savedAnswer) {
-      localStorage.setItem('ws_master_password', newPassVal);
-      sessionStorage.setItem('ws_is_logged_in', 'true');
-      state.isLoggedIn = true;
-      
-      triggerUnlockSequence(() => {
-        const authLogoutBtn = document.getElementById('auth-logout-btn');
-        if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+    let users = [];
+    try {
+      users = JSON.parse(localStorage.getItem('tsrps_users')) || [];
+    } catch (err) {
+      users = [];
+    }
+    
+    const userIndex = users.findIndex(u => u.username.toLowerCase() === usernameVal);
+    if (userIndex !== -1) {
+      const user = users[userIndex];
+      const savedAnswer = (user.answer || '').toLowerCase().trim();
+      if (answerVal === savedAnswer) {
+        // Update password
+        user.password = newPassVal;
+        users[userIndex] = user;
+        localStorage.setItem('tsrps_users', JSON.stringify(users));
         
-        alert("Password reset successful! You are now logged in.");
+        sessionStorage.setItem('ws_is_logged_in', 'true');
+        sessionStorage.setItem('ws_current_user', JSON.stringify(user));
+        state.isLoggedIn = true;
+        state.currentUser = user;
         
-        // Load and refresh
-        loadStateFromStorage();
-        populateSelectors();
-        updateGlobalAlerts();
-        renderDashboardCharts();
-      });
+        const usersNavItem = document.getElementById('nav-item-users');
+        if (usersNavItem) {
+          usersNavItem.style.display = user.role === 'admin' ? 'block' : 'none';
+        }
+        
+        triggerUnlockSequence(() => {
+          const authLogoutBtn = document.getElementById('auth-logout-btn');
+          if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+          
+          alert("Password reset successful! You are now logged in.");
+          
+          loadStateFromStorage();
+          populateSelectors();
+          updateGlobalAlerts();
+          renderDashboardCharts();
+        });
+      } else {
+        shakeCard(authCard);
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "Incorrect answer to security question.";
+        }
+      }
     } else {
       shakeCard(authCard);
       if (errorEl) {
         errorEl.style.display = 'block';
-        errorEl.innerText = "Incorrect answer to security question.";
+        errorEl.innerText = "Username not found.";
       }
     }
   }
@@ -5087,6 +5385,292 @@ function refreshActiveTabContent() {
     case 'reports':
       renderHistoryTab();
       break;
+    case 'users':
+      renderUsersPanel();
+      break;
+  }
+}
+
+// --- User Manager Helper Functions ---
+async function loadUsersList() {
+  if (supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('user_permissions')
+        .select('*')
+        .order('created_at', { ascending: true });
+        
+      if (error) {
+        console.error("Error loading user permissions from Supabase:", error);
+        return [];
+      }
+      return data.map(u => ({
+        username: u.email,
+        role: u.role,
+        status: u.status,
+        createdAt: u.created_at
+      }));
+    } catch (e) {
+      console.error("Error loading users from cloud:", e);
+      return [];
+    }
+  } else {
+    try {
+      return JSON.parse(localStorage.getItem('tsrps_users')) || [];
+    } catch (e) {
+      return [];
+    }
+  }
+}
+
+async function updateUserStatusInCloud(email, status) {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient
+    .from('user_permissions')
+    .update({ status: status })
+    .eq('email', email.toLowerCase());
+    
+  if (error) console.error("Error updating user status in cloud:", error);
+}
+
+async function updateUserRoleInCloud(email, role) {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient
+    .from('user_permissions')
+    .update({ role: role })
+    .eq('email', email.toLowerCase());
+    
+  if (error) console.error("Error updating user role in cloud:", error);
+}
+
+async function deleteUserFromCloud(email) {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient
+    .from('user_permissions')
+    .delete()
+    .eq('email', email.toLowerCase());
+    
+  if (error) console.error("Error deleting user from cloud:", error);
+}
+
+async function renderUsersPanel() {
+  const tableBody = document.getElementById('admin-users-table-body');
+  const emptyEl = document.getElementById('admin-users-empty');
+  const searchInput = document.getElementById('admin-user-search');
+  const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  
+  if (!tableBody) return;
+  
+  const users = await loadUsersList();
+  const filtered = users.filter(u => u.username.toLowerCase().includes(searchQuery));
+  
+  if (filtered.length === 0) {
+    tableBody.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  
+  if (emptyEl) emptyEl.style.display = 'none';
+  
+  tableBody.innerHTML = filtered.map(user => {
+    const isSelf = state.currentUser && (
+      (supabaseClient && state.currentUser.email === user.username) ||
+      (!supabaseClient && state.currentUser.username === user.username)
+    );
+    
+    let statusClass = 'badge-pending';
+    if (user.status === 'approved') statusClass = 'badge-approved';
+    if (user.status === 'suspended') statusClass = 'badge-suspended';
+    
+    const roleLabel = user.role === 'admin' ? 'Admin' : 'User';
+    const statusLabel = user.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1) : 'Pending';
+    
+    return `
+      <tr style="border-bottom: 1px solid var(--border-color);">
+        <td style="padding: 12px 8px; font-size: 0.85rem; color: #fff; font-weight: 500;">
+          ${user.username} ${isSelf ? '<span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal; margin-left: 4px;">(you)</span>' : ''}
+        </td>
+        <td style="padding: 12px 8px; font-size: 0.85rem; color: var(--text-secondary);">
+          <span class="badge ${user.role === 'admin' ? 'badge-role-admin' : 'badge-role-user'}">${roleLabel}</span>
+        </td>
+        <td style="padding: 12px 8px;">
+          <span class="badge ${statusClass}">${statusLabel}</span>
+        </td>
+        <td style="padding: 12px 8px; text-align: right; display: flex; justify-content: flex-end; gap: 8px;">
+          ${isSelf ? `
+            <span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; padding: 6px 0;">No Actions</span>
+          ` : `
+            <button class="btn btn-secondary btn-user-toggle-status" data-username="${user.username}" data-status="${user.status}" style="font-size: 0.75rem; padding: 4px 8px; height: auto;">
+              ${user.status === 'approved' ? 'Suspend' : 'Approve'}
+            </button>
+            <button class="btn btn-secondary btn-user-toggle-role" data-username="${user.username}" data-role="${user.role}" style="font-size: 0.75rem; padding: 4px 8px; height: auto;">
+              Make ${user.role === 'admin' ? 'User' : 'Admin'}
+            </button>
+            <button class="btn btn-danger btn-user-delete" data-username="${user.username}" style="font-size: 0.75rem; padding: 4px 8px; height: auto;">
+              Delete
+            </button>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
+  // Wire up event listeners
+  tableBody.querySelectorAll('.btn-user-toggle-status').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const username = e.target.getAttribute('data-username');
+      const currentStatus = e.target.getAttribute('data-status');
+      const newStatus = currentStatus === 'approved' ? 'suspended' : 'approved';
+      
+      if (supabaseClient) {
+        await updateUserStatusInCloud(username, newStatus);
+      } else {
+        let localUsers = JSON.parse(localStorage.getItem('tsrps_users')) || [];
+        const idx = localUsers.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+        if (idx !== -1) {
+          localUsers[idx].status = newStatus;
+          localStorage.setItem('tsrps_users', JSON.stringify(localUsers));
+        }
+      }
+      renderUsersPanel();
+    });
+  });
+  
+  tableBody.querySelectorAll('.btn-user-toggle-role').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const username = e.target.getAttribute('data-username');
+      const currentRole = e.target.getAttribute('data-role');
+      const newRole = currentRole === 'admin' ? 'user' : 'admin';
+      
+      if (supabaseClient) {
+        await updateUserRoleInCloud(username, newRole);
+      } else {
+        let localUsers = JSON.parse(localStorage.getItem('tsrps_users')) || [];
+        const idx = localUsers.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+        if (idx !== -1) {
+          localUsers[idx].role = newRole;
+          localStorage.setItem('tsrps_users', JSON.stringify(localUsers));
+        }
+      }
+      renderUsersPanel();
+    });
+  });
+  
+  tableBody.querySelectorAll('.btn-user-delete').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const username = e.target.getAttribute('data-username');
+      if (!confirm(`Are you sure you want to delete user "${username}"?`)) return;
+      
+      if (supabaseClient) {
+        await deleteUserFromCloud(username);
+      } else {
+        let localUsers = JSON.parse(localStorage.getItem('tsrps_users')) || [];
+        localUsers = localUsers.filter(u => u.username.toLowerCase() !== username.toLowerCase());
+        localStorage.setItem('tsrps_users', JSON.stringify(localUsers));
+      }
+      renderUsersPanel();
+    });
+  });
+}
+
+function initUsersPanel() {
+  const searchInput = document.getElementById('admin-user-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', renderUsersPanel);
+  }
+  
+  const addUserForm = document.getElementById('admin-add-user-form');
+  if (addUserForm) {
+    addUserForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const usernameInput = document.getElementById('admin-user-username');
+      const passwordInput = document.getElementById('admin-user-password');
+      const roleInput = document.getElementById('admin-user-role');
+      const errorEl = document.getElementById('admin-add-user-error');
+      
+      if (errorEl) {
+        errorEl.style.display = 'none';
+        errorEl.innerText = '';
+      }
+      
+      const username = usernameInput ? usernameInput.value.trim() : '';
+      const password = passwordInput ? passwordInput.value : '';
+      const role = roleInput ? roleInput.value : 'user';
+      
+      if (!username || !password) return;
+      
+      if (supabaseClient) {
+        try {
+          const { data: existing } = await supabaseClient
+            .from('user_permissions')
+            .select('*')
+            .eq('email', username.toLowerCase())
+            .maybeSingle();
+            
+          if (existing) {
+            if (errorEl) {
+              errorEl.style.display = 'block';
+              errorEl.innerText = "A user permission record with this email already exists.";
+            }
+            return;
+          }
+          
+          const { error } = await supabaseClient
+            .from('user_permissions')
+            .insert({
+              email: username.toLowerCase(),
+              role: role,
+              status: 'approved'
+            });
+            
+          if (error) {
+            if (errorEl) {
+              errorEl.style.display = 'block';
+              errorEl.innerText = error.message;
+            }
+            return;
+          }
+          
+          alert(`User permission pre-approved! The user can now sign up using the email "${username}" and they will be instantly approved.`);
+        } catch (err) {
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = err.message || "An error occurred.";
+          }
+          return;
+        }
+      } else {
+        let localUsers = [];
+        try {
+          localUsers = JSON.parse(localStorage.getItem('tsrps_users')) || [];
+        } catch (err) {
+          localUsers = [];
+        }
+        
+        if (localUsers.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = "Username already exists.";
+          }
+          return;
+        }
+        
+        localUsers.push({
+          username: username.toLowerCase(),
+          password: password,
+          role: role,
+          status: 'approved',
+          question: 'What was the name of your first school?',
+          answer: 'standard',
+          createdAt: new Date().toISOString()
+        });
+        localStorage.setItem('tsrps_users', JSON.stringify(localUsers));
+        alert(`User account "${username}" successfully created and approved.`);
+      }
+      
+      addUserForm.reset();
+      renderUsersPanel();
+    });
   }
 }
 
@@ -5124,6 +5708,8 @@ function switchTab(tabId) {
     renderLedgerTab();
   } else if (tabId === 'reports') {
     renderHistoryTab();
+  } else if (tabId === 'users') {
+    renderUsersPanel();
   }
 }
 
@@ -5396,6 +5982,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   initVoiceSearch();
   initChartsCarousel();
+  initUsersPanel();
+
+  // Recovery username input listener to dynamically display security question
+  const recoveryUsername = document.getElementById('recovery-username');
+  if (recoveryUsername) {
+    recoveryUsername.addEventListener('input', () => {
+      const usernameVal = recoveryUsername.value.trim().toLowerCase();
+      const questionDisplay = document.getElementById('recovery-question-display');
+      if (!usernameVal) {
+        if (questionDisplay) questionDisplay.value = "Enter username to display question.";
+        return;
+      }
+      
+      let users = [];
+      try {
+        users = JSON.parse(localStorage.getItem('tsrps_users')) || [];
+      } catch (e) {
+        users = [];
+      }
+      
+      const user = users.find(u => u.username.toLowerCase() === usernameVal);
+      if (user) {
+        if (questionDisplay) questionDisplay.value = user.question || "No security question configured.";
+      } else {
+        if (questionDisplay) questionDisplay.value = "User not found.";
+      }
+    });
+  }
 
   // Sidebar Collapsible Navigation
   const appContainer = document.getElementById('app-container');
@@ -5868,6 +6482,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Cloud DB Settings Modal Event Listeners
   const dbModal = document.getElementById('db-settings-modal');
   const dbBtn = document.getElementById('db-settings-btn');
+  const authDbBtn = document.getElementById('auth-db-settings-btn');
   const closeDbModalBtn = document.getElementById('close-db-settings-modal');
   const cancelDbBtn = document.getElementById('close-db-settings-btn');
   const saveDbBtn = document.getElementById('save-db-settings-btn');
@@ -5875,14 +6490,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dbKeyInput = document.getElementById('db-supabase-key');
   const dbStatusEl = document.getElementById('db-status-message');
 
-  if (dbBtn && dbModal) {
-    dbBtn.addEventListener('click', () => {
-      if (dbUrlInput) dbUrlInput.value = localStorage.getItem('supabase_url') || '';
-      if (dbKeyInput) dbKeyInput.value = localStorage.getItem('supabase_key') || '';
-      if (dbStatusEl) dbStatusEl.style.display = 'none';
-      dbModal.classList.add('active');
-    });
-  }
+  const openDbModal = () => {
+    if (dbUrlInput) dbUrlInput.value = localStorage.getItem('supabase_url') || '';
+    if (dbKeyInput) dbKeyInput.value = localStorage.getItem('supabase_key') || '';
+    if (dbStatusEl) dbStatusEl.style.display = 'none';
+    if (dbModal) dbModal.classList.add('active');
+  };
+
+  if (dbBtn) dbBtn.addEventListener('click', openDbModal);
+  if (authDbBtn) authDbBtn.addEventListener('click', openDbModal);
 
   const closeDbModal = () => {
     if (dbModal) dbModal.classList.remove('active');

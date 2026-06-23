@@ -11,6 +11,10 @@
   <!-- Full-Screen Auth Overlay -->
   <div id="auth-overlay" class="auth-overlay active">
     <div class="auth-card">
+      <!-- Database Settings Toggle Gear on Lock Screen -->
+      <button id="auth-db-settings-btn" type="button" style="position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: color 0.2s, background 0.2s; z-index: 10;" title="Database Settings">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-settings" style="transition: transform 0.3s ease;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
       <div class="auth-logo">
         <div style="margin: 0 auto 16px; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;">
           <svg id="auth-lock-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 44px; height: 44px; stroke: var(--accent-primary); transition: transform 0.3s ease;">
@@ -26,12 +30,12 @@
 
       <!-- Login Form -->
       <form id="auth-login-form">
-        <div id="auth-mode-indicator" style="font-size: 0.75rem; color: var(--accent-primary); text-transform: uppercase; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.5px; text-align: center;">Local Database Lock</div>
+        <div id="auth-mode-indicator" style="font-size: 0.75rem; color: var(--accent-primary); text-transform: uppercase; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.5px; text-align: center;">Secure System Access</div>
         
         <!-- Username field for Local Mode (hidden in Supabase mode) -->
         <div class="form-group" id="auth-username-group" style="margin-bottom: 12px;">
           <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Username</label>
-          <input type="text" id="auth-username" class="form-control" placeholder="e.g. admin" style="height: 38px; font-size: 0.85rem;" required>
+          <input type="text" id="auth-username" class="form-control" placeholder="e.g. jeetu@tsrp.com" style="height: 38px; font-size: 0.85rem;" required>
         </div>
 
         <!-- Email field for Supabase (hidden in Local mode) -->
@@ -43,6 +47,23 @@
         <div class="form-group" style="margin-bottom: 16px;">
           <label class="form-label" id="auth-password-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Master Password</label>
           <input type="password" id="auth-password" class="form-control" placeholder="••••••••" style="height: 38px; font-size: 0.85rem;" required>
+        </div>
+
+        <!-- Local Mode Signup Fields -->
+        <div id="local-signup-fields" style="display: none; margin-bottom: 16px;">
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Security Question</label>
+            <select id="auth-security-question" class="form-control" style="height: 38px; font-size: 0.85rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px;">
+              <option value="What was the name of your first school?">What was the name of your first school?</option>
+              <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
+              <option value="What is the name of your favorite pet?">What is the name of your favorite pet?</option>
+              <option value="What was your first car?">What was your first car?</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Answer</label>
+            <input type="text" id="auth-security-answer" class="form-control" placeholder="Answer for recovery" style="height: 38px; font-size: 0.85rem;">
+          </div>
         </div>
 
         <div id="auth-error-msg" style="color: var(--color-danger); font-size: 0.78rem; text-align: center; margin-bottom: 12px; display: none; padding: 6px; background: rgba(239, 68, 68, 0.08); border-radius: 6px;"></div>
@@ -71,8 +92,12 @@
         <!-- Local Mode recovery fields -->
         <div id="recovery-local-fields">
           <div class="form-group" style="margin-bottom: 12px;">
+            <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Username</label>
+            <input type="text" id="recovery-username" class="form-control" placeholder="e.g. admin" style="height: 38px; font-size: 0.85rem;">
+          </div>
+          <div class="form-group" style="margin-bottom: 12px;">
             <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Security Question</label>
-            <input type="text" id="recovery-question-display" class="form-control" readonly style="height: 38px; font-size: 0.85rem; background: rgba(0,0,0,0.15); color: var(--text-secondary);" value="No security question configured.">
+            <input type="text" id="recovery-question-display" class="form-control" readonly style="height: 38px; font-size: 0.85rem; background: rgba(0,0,0,0.15); color: var(--text-secondary);" value="Enter username to display question.">
           </div>
           <div class="form-group" style="margin-bottom: 12px;">
             <label class="form-label" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block; text-align: left;">Answer</label>
@@ -209,6 +234,11 @@
         <li class="nav-item" data-tab="reports">
           <button type="button">
             <span style="font-size: 1.15rem; margin-right: 4px;">📄</span> Reports
+          </button>
+        </li>
+        <li class="nav-item" id="nav-item-users" data-tab="users" style="display: none;">
+          <button type="button">
+            <span style="font-size: 1.15rem; margin-right: 4px;">👥</span> User Manager
           </button>
         </li>
       </nav>
@@ -743,6 +773,66 @@
         </div>
       </section>
 
+      <!-- 8. USER MANAGEMENT PANEL -->
+      <section id="users-panel" class="tab-panel">
+        <header class="main-header">
+          <div class="header-title-section">
+            <h1>User Accounts & Access Manager</h1>
+            <p>Manage system access credentials, approve self-registered pending users, or update permissions.</p>
+          </div>
+        </header>
+
+        <div class="grid-3" style="gap: 20px; align-items: start; margin-bottom: 24px;">
+          <!-- Add User Card -->
+          <div class="card grid-span-1" style="padding: 20px;">
+            <h3 style="font-size: 1rem; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">Create New User Account</h3>
+            <form id="admin-add-user-form">
+              <div class="form-group">
+                <label class="form-label">Username / Email</label>
+                <input type="text" id="admin-user-username" class="form-control" placeholder="e.g. prabhat" required style="height: 38px; font-size: 0.85rem;">
+              </div>
+              <div class="form-group" style="margin-top: 12px;">
+                <label class="form-label">Password</label>
+                <input type="password" id="admin-user-password" class="form-control" placeholder="••••••••" required style="height: 38px; font-size: 0.85rem;">
+              </div>
+              <div class="form-group" style="margin-top: 12px;">
+                <label class="form-label">User Role</label>
+                <select id="admin-user-role" class="form-control" style="height: 38px; font-size: 0.85rem;">
+                  <option value="user" selected>Standard User</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+              <div id="admin-add-user-error" style="color: var(--color-danger); font-size: 0.78rem; margin-top: 8px; display: none;"></div>
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 16px; height: 38px;">Create & Approve User</button>
+            </form>
+          </div>
+
+          <!-- User Directory Card -->
+          <div class="card grid-span-2" style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+              <h3 style="font-size: 1rem; margin-bottom: 0;">Access Permission Directory</h3>
+              <input type="text" id="admin-user-search" class="form-control" placeholder="Search users..." style="max-width: 200px; height: 32px; font-size: 0.8rem; padding: 0 10px;">
+            </div>
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
+                  <th style="padding: 10px 8px; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Username</th>
+                  <th style="padding: 10px 8px; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); width: 80px;">Role</th>
+                  <th style="padding: 10px 8px; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); width: 100px;">Status</th>
+                  <th style="padding: 10px 8px; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); text-align: right; width: 180px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-table-body">
+                <!-- Injected dynamically by JS -->
+              </tbody>
+            </table>
+            <div id="admin-users-empty" style="display: none; padding: 30px; text-align: center; color: var(--text-muted); font-style: italic; font-size: 0.85rem;">
+              No users match your query.
+            </div>
+          </div>
+        </div>
+      </section>
+
 
 
     </main>
@@ -1097,26 +1187,38 @@ create table if not exists public.production_history (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- 6. Enable row level security (RLS)
+-- 6. Create user_permissions table
+create table if not exists public.user_permissions (
+  id uuid default gen_random_uuid() primary key,
+  email text not null unique,
+  role text default 'user',
+  status text default 'pending',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 7. Enable row level security (RLS)
 alter table public.raw_materials enable row level security;
 alter table public.blueprints enable row level security;
 alter table public.estimates enable row level security;
 alter table public.dispatches enable row level security;
 alter table public.production_history enable row level security;
+alter table public.user_permissions enable row level security;
 
--- 7. Drop existing policies to avoid "already exists" errors
+-- 8. Drop existing policies to avoid "already exists" errors
 drop policy if exists "Allow all users to manage raw_materials" on public.raw_materials;
 drop policy if exists "Allow all users to manage blueprints" on public.blueprints;
 drop policy if exists "Allow all users to manage estimates" on public.estimates;
 drop policy if exists "Allow all users to manage dispatches" on public.dispatches;
 drop policy if exists "Allow all users to manage production_history" on public.production_history;
+drop policy if exists "Allow all users to manage user_permissions" on public.user_permissions;
 
--- 8. Create policies for public access (anon) for read/write
+-- 9. Create policies for public access (anon) for read/write
 create policy "Allow all users to manage raw_materials" on public.raw_materials for all using (true) with check (true);
 create policy "Allow all users to manage blueprints" on public.blueprints for all using (true) with check (true);
 create policy "Allow all users to manage estimates" on public.estimates for all using (true) with check (true);
 create policy "Allow all users to manage dispatches" on public.dispatches for all using (true) with check (true);
 create policy "Allow all users to manage production_history" on public.production_history for all using (true) with check (true);
+create policy "Allow all users to manage user_permissions" on public.user_permissions for all using (true) with check (true);
           </textarea>
         </div>
       </div>
