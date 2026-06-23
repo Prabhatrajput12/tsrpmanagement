@@ -1645,6 +1645,291 @@ const formatCurrency = (val) => {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
 };
 
+const buildEstimatePrintHTML = (estimate) => {
+  let materialRows = '';
+  // Group materials by partInstanceId to keep distinct loads separate
+  const partGroups = {};
+  estimate.items.forEach(item => {
+    const key = item.partInstanceId || 'Other';
+    if (!partGroups[key]) {
+      partGroups[key] = {
+        name: item.partName || 'Other/Custom',
+        items: []
+      };
+    }
+    partGroups[key].items.push(item);
+  });
+  // Build rows with part sub-headers
+  let partIndex = 1;
+  for (const [partInstanceId, group] of Object.entries(partGroups)) {
+    let partQty = 1;
+    let partPoNumber = '';
+    if (estimate.parts) {
+      const part = estimate.parts.find(p => p.id === partInstanceId);
+      if (part) {
+        partQty = part.quantity || 1;
+        partPoNumber = part.poNumber || '';
+      }
+    }
+    
+    // Fallback search in templates catalog
+    if (!partPoNumber && typeof state !== 'undefined' && state.templatesCatalog) {
+      const template = state.templatesCatalog.find(t => t.name === group.name || t.id === estimate.templateId);
+      if (template) {
+        partPoNumber = template.poNumber || '';
+      }
+    }
+
+    materialRows += `
+      <tr class="print-part-header">
+        <td colspan="3" style="font-weight: 600; background: var(--bg-card); padding: 6px;">Part ${partIndex}: ${group.name} (Qty: ${partQty})${partPoNumber ? ` — PO No: ${partPoNumber}` : ''}</td>
+      </tr>`;
+    partIndex++;
+    const items = group.items;
+    items.forEach(it => {
+      let weightDesc = '';
+      if ((it.componentWeight || 0) > 0 || (it.runnerWeight || 0) > 0) {
+        const u = it.weightUnit || 'g';
+        weightDesc = `
+          <div>Comp. Wt: ${it.componentWeight || 0}${u}</div>
+          <div style="margin-top: 2px;">Runner Wt: ${it.runnerWeight || 0}${u}</div>
+        `;
+      } else {
+        weightDesc = '-';
+      }
+      materialRows += `
+        <tr>
+          <td>
+            <div style="font-weight: 600;">${it.name}</div>
+            <div style="font-size: 0.72rem; color: rgba(128, 128, 128, 0.85); font-family: monospace; display: flex; flex-wrap: wrap; gap: 8px;">
+              ${it.itemCode ? `<span>Code: ${it.itemCode}</span>` : ''}
+              ${it.invoiceNumber ? `<span>INV: ${it.invoiceNumber}</span>` : ''}
+            </div>
+          </td>
+          <td style="font-size: 0.82rem; color: #475569; line-height: 1.3;">${weightDesc}</td>
+          <td style="text-align: right; font-weight: 500;">${formatWeightForDisplay(it.calculatedQty, it.unit)}</td>
+        </tr>`;
+    });
+  }
+
+  const dateStr = estimate.date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const timeStr = estimate.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  return `
+    <div class="estimate-print-sheet">
+      <div class="print-header">
+        <div class="print-logo-details">
+          <h2>TSRP<br>PLAST</h2>
+          <p>Professional Manufacturing & Engineering Services</p>
+        </div>
+        <div class="print-meta-details">
+          <h3>Work Estimate</h3>
+          <p><strong>Date Generated:</strong> ${dateStr}</p>
+          <p><strong>Time Generated:</strong> ${timeStr}</p>
+        </div>
+      </div>
+      
+      <div class="print-addresses" style="grid-template-columns: 1fr;">
+        <div class="print-address-box">
+          <h4>Project Details</h4>
+          <p><strong>Project Title:</strong> ${estimate.title}</p>
+          <p><strong>Production Qty:</strong> ${estimate.quantity} unit(s)</p>
+          <p><strong>Total Mfg. Time:</strong> ${formatDurationString(estimate.totals ? estimate.totals.totalMfgSeconds : 0)}</p>
+          ${estimate.parts && estimate.parts.length > 1 ? `
+            <div style="font-size: 0.8rem; color: #475569; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0;">
+              <strong>Time Breakdown by Part:</strong>
+              <ul style="margin: 4px 0 0 0; padding-left: 20px;">
+                ${estimate.parts.map((p, idx) => `<li>Part ${idx + 1} (${p.name}): ${formatDurationString(convertToSeconds(p.mfgTime, p.mfgTimeUnit) * (p.quantity || 1))} (Qty: ${p.quantity || 1})</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th style="width: 40%;">Raw Material</th>
+            <th style="width: 35%;">Weight Detail</th>
+            <th style="width: 25%; text-align: right;">Calculated Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${materialRows}
+        </tbody>
+      </table>
+
+      <div class="print-totals-section" style="display: none;">
+        <table class="print-totals-table">
+          <tr>
+            <td class="lbl">Raw Material Total:</td>
+            <td class="val">${formatCurrency(estimate.totals ? (estimate.totals.materialsCost || estimate.totals.totalMaterialCost || 0) : 0)}</td>
+          </tr>
+          <tr>
+            <td class="lbl">Workshop Production Cost:</td>
+            <td class="val">${formatCurrency(estimate.totals ? estimate.totals.baseCost : 0)}</td>
+          </tr>
+          <tr>
+            <td class="lbl">Markup / Client Margin (${estimate.markup}%):</td>
+            <td class="val">${formatCurrency(estimate.totals ? estimate.totals.markupAmount : 0)}</td>
+          </tr>
+          <tr class="grand-total">
+            <td class="lbl">Grand Total Quote:</td>
+            <td class="val">${formatCurrency(estimate.totals ? estimate.totals.finalPrice : 0)}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="print-signature-section">
+        <div class="signature-box">
+          <p>Prepared By</p>
+          <span>TSRP PLAST Authorized Estimator</span>
+        </div>
+        <div class="signature-box">
+          <p>Person Acceptance</p>
+        </div>
+      </div>
+
+      <div class="print-footer">
+        <p>This document is an engineering/manufacturing material and duration estimate valid for 30 days.</p>
+        <p style="margin-top: 10px; font-weight: 500;">Thank you for your business!</p>
+      </div>
+    </div>
+  `;
+};
+
+const buildDispatchPrintHTML = (dispatch) => {
+  let itemsRows = '';
+  dispatch.items.forEach((it, idx) => {
+    // Backwards-compatibility resolver for old dispatch logs missing poNumber
+    let itemPo = it.poNumber || '';
+    if (!itemPo && dispatch.estimateId && typeof state !== 'undefined' && state.savedEstimates) {
+      const estIdList = dispatch.estimateId.split(',');
+      const est = state.savedEstimates.find(e => estIdList.includes(e.id));
+      if (est && est.parts) {
+        const part = est.parts.find(p => p.id === it.id);
+        if (part) {
+          itemPo = part.poNumber || '';
+        }
+      }
+    }
+
+    const boxDims = it.boxDimensions || '12x12x12 in';
+    const pcsPer = it.pcsPerBox || '-';
+    const totBoxes = it.calculatedBoxes || '-';
+
+    itemsRows += `
+      <tr>
+        <td style="text-align: center;">${idx + 1}</td>
+        <td>
+          <div style="font-weight: 600;">${it.name}</div>
+          ${itemPo ? `<div style="font-size: 0.72rem; color: #475569; margin-top: 2px;">PO No: ${itemPo}</div>` : ''}
+        </td>
+        <td style="text-align: right; font-weight: 500;">${it.dispatchedQty}</td>
+        <td style="text-align: center; font-size: 0.8rem; color: #475569;">${boxDims}</td>
+        <td style="text-align: right; font-size: 0.8rem; color: #475569;">${pcsPer}</td>
+        <td style="text-align: right; font-weight: 600;">${totBoxes}</td>
+      </tr>`;
+  });
+
+  const dateStr = dispatch.date || new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+  const timeStr = dispatch.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+  // Format Reference Quote to only show dispatched part names and their PO numbers
+  const dispatchedPartNames = dispatch.items.map(it => it.name).join(' + ');
+  
+  // Resolve unique PO numbers
+  let uniquePos = [];
+  if (dispatch.items) {
+    uniquePos = [...new Set(dispatch.items.map(it => {
+      let itemPo = it.poNumber || '';
+      if (!itemPo && dispatch.estimateId && typeof state !== 'undefined' && state.savedEstimates) {
+        const estIdList = dispatch.estimateId.split(',');
+        const est = state.savedEstimates.find(e => estIdList.includes(e.id));
+        if (est && est.parts) {
+          const part = est.parts.find(p => p.id === it.id);
+          if (part) {
+            itemPo = part.poNumber || '';
+          }
+        }
+      }
+      return itemPo;
+    }).filter(Boolean))];
+  }
+  const poDisplay = uniquePos.length > 0 ? ` — PO No: ${uniquePos.join(', ')}` : '';
+
+  return `
+    <div class="estimate-print-sheet" style="margin-bottom: 30px; page-break-after: always;">
+      <div class="print-header">
+        <div class="print-logo-details">
+          <h2>TSRP<br>PLAST</h2>
+          <p>Professional Manufacturing & Engineering Services</p>
+        </div>
+        <div class="print-meta-details" style="text-align: right;">
+          <h3 style="margin-bottom: 6px; font-size: 1.3rem; letter-spacing: 1px; color: var(--text-primary);">DELIVERY CHALLAN</h3>
+          <p><strong>Challan/GP No:</strong> ${dispatch.gatePass || dispatch.id}</p>
+          <p><strong>Date:</strong> ${dateStr} ${timeStr}</p>
+        </div>
+      </div>
+      
+      <div class="print-addresses" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 24px; margin-bottom: 24px;">
+        <div class="print-address-box">
+          <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 4px; margin-bottom: 8px;">Consignee (Client Details)</h4>
+          <p><strong>Client Representative:</strong> ${dispatch.clientName || 'General Client'}</p>
+          <p><strong>Reference Quote:</strong> ${dispatchedPartNames || 'N/A'}${poDisplay}</p>
+        </div>
+        <div class="print-address-box">
+          <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 4px; margin-bottom: 8px;">Transport & Shipping Details</h4>
+          <p><strong>Vehicle Number:</strong> ${dispatch.vehicleNumber || 'Self-Pickup / N/A'}</p>
+          <p><strong>Driver Name:</strong> ${dispatch.driverName || 'N/A'}</p>
+          <p><strong>Status:</strong> ${dispatch.status}</p>
+        </div>
+      </div>
+
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th style="width: 8%; text-align: center;">Sr No.</th>
+            <th style="width: 37%;">Item / Part Name</th>
+            <th style="width: 15%; text-align: right;">Qty Shipped</th>
+            <th style="width: 15%; text-align: center;">Box Dims</th>
+            <th style="width: 12%; text-align: right;">Pcs/Box</th>
+            <th style="width: 13%; text-align: right;">Total Boxes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsRows}
+        </tbody>
+      </table>
+
+      ${dispatch.remarks ? `
+        <div style="margin-top: 24px; padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: var(--border-radius-sm);">
+          <strong>Remarks / Delivery Notes:</strong>
+          <p style="margin: 6px 0 0 0; font-size: 0.85rem; line-height: 1.4; color: var(--text-secondary);">${dispatch.remarks}</p>
+        </div>
+      ` : ''}
+
+      <div class="print-signature-section" style="margin-top: 60px;">
+        <div class="signature-box">
+          <p>Prepared By</p>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">TSRP PLAST Warehouse</span>
+        </div>
+        <div class="signature-box">
+          <p>Driver / Carrier Signature</p>
+        </div>
+        <div class="signature-box">
+          <p>Receiver's Signature & Seal</p>
+        </div>
+      </div>
+
+      <div class="print-footer" style="margin-top: 50px;">
+        <p>This delivery challan acts as a gate pass and proof of shipment delivery.</p>
+        <p style="margin-top: 10px; font-weight: 500;">Thank you for your business!</p>
+      </div>
+    </div>
+  `;
+};
+
 const formatTime = (minutes) => {
   if (minutes < 60) return `${Math.round(minutes)}m`;
   const hrs = Math.floor(minutes / 60);
@@ -4519,137 +4804,10 @@ function openPrintPreviewForMultipleDispatches(dispatchIds) {
   if (!printArea) return;
 
   let fullHTML = '';
-
   dispatchIds.forEach(dispatchId => {
     const dispatch = state.dispatches.find(d => d.id === dispatchId);
     if (!dispatch) return;
-
-    let itemsRows = '';
-    dispatch.items.forEach((it, idx) => {
-      // Backwards-compatibility resolver for old dispatch logs missing poNumber
-      let itemPo = it.poNumber || '';
-      if (!itemPo && dispatch.estimateId) {
-        const estIdList = dispatch.estimateId.split(',');
-        const est = state.savedEstimates.find(e => estIdList.includes(e.id));
-        if (est && est.parts) {
-          const part = est.parts.find(p => p.id === it.id);
-          if (part) {
-            itemPo = part.poNumber || '';
-          }
-        }
-      }
-
-      const boxDims = it.boxDimensions || '12x12x12 in';
-      const pcsPer = it.pcsPerBox || '-';
-      const totBoxes = it.calculatedBoxes || '-';
-
-      itemsRows += `
-        <tr>
-          <td style="text-align: center;">${idx + 1}</td>
-          <td>
-            <div style="font-weight: 600;">${it.name}</div>
-            ${itemPo ? `<div style="font-size: 0.72rem; color: #475569; margin-top: 2px;">PO No: ${itemPo}</div>` : ''}
-          </td>
-          <td style="text-align: right; font-weight: 500;">${it.dispatchedQty}</td>
-          <td style="text-align: center; font-size: 0.8rem; color: #475569;">${boxDims}</td>
-          <td style="text-align: right; font-size: 0.8rem; color: #475569;">${pcsPer}</td>
-          <td style="text-align: right; font-weight: 600;">${totBoxes}</td>
-        </tr>`;
-    });
-
-    const dateStr = dispatch.date || new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
-    const timeStr = dispatch.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-
-    // Format Reference Quote to only show dispatched part names and their PO numbers
-    const dispatchedPartNames = dispatch.items.map(it => it.name).join(' + ');
-    
-    // Resolve unique PO numbers
-    const uniquePos = [...new Set(dispatch.items.map(it => {
-      let itemPo = it.poNumber || '';
-      if (!itemPo && dispatch.estimateId) {
-        const estIdList = dispatch.estimateId.split(',');
-        const est = state.savedEstimates.find(e => estIdList.includes(e.id));
-        if (est && est.parts) {
-          const part = est.parts.find(p => p.id === it.id);
-          if (part) {
-            itemPo = part.poNumber || '';
-          }
-        }
-      }
-      return itemPo;
-    }).filter(Boolean))];
-    const poDisplay = uniquePos.length > 0 ? ` — PO No: ${uniquePos.join(', ')}` : '';
-
-    fullHTML += `
-      <div class="estimate-print-sheet">
-        <div class="print-header">
-          <div class="print-logo-details">
-            <h2>TSRP<br>PLAST</h2>
-            <p>Professional Manufacturing & Engineering Services</p>
-          </div>
-          <div class="print-meta-details" style="text-align: right;">
-            <h3 style="margin-bottom: 6px; font-size: 1.3rem; letter-spacing: 1px; color: var(--text-primary);">DELIVERY CHALLAN</h3>
-            <p><strong>Challan/GP No:</strong> ${dispatch.gatePass || dispatch.id}</p>
-            <p><strong>Date:</strong> ${dateStr} ${timeStr}</p>
-          </div>
-        </div>
-        
-        <div class="print-addresses" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 24px; margin-bottom: 24px;">
-          <div class="print-address-box">
-            <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 4px; margin-bottom: 8px;">Consignee (Client Details)</h4>
-            <p><strong>Client Representative:</strong> ${dispatch.clientName || 'General Client'}</p>
-            <p><strong>Reference Quote:</strong> ${dispatchedPartNames || 'N/A'}${poDisplay}</p>
-          </div>
-          <div class="print-address-box">
-            <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 4px; margin-bottom: 8px;">Transport & Shipping Details</h4>
-            <p><strong>Vehicle Number:</strong> ${dispatch.vehicleNumber || 'Self-Pickup / N/A'}</p>
-            <p><strong>Driver Name:</strong> ${dispatch.driverName || 'N/A'}</p>
-            <p><strong>Status:</strong> ${dispatch.status}</p>
-          </div>
-        </div>
-
-        <table class="print-table">
-          <thead>
-            <tr>
-              <th style="width: 8%; text-align: center;">Sr No.</th>
-              <th style="width: 37%;">Item / Part Name</th>
-              <th style="width: 15%; text-align: right;">Qty Shipped</th>
-              <th style="width: 15%; text-align: center;">Box Dims</th>
-              <th style="width: 12%; text-align: right;">Pcs/Box</th>
-              <th style="width: 13%; text-align: right;">Total Boxes</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsRows}
-          </tbody>
-        </table>
-
-        ${dispatch.remarks ? `
-          <div style="margin-top: 24px; padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: var(--border-radius-sm);">
-            <strong>Remarks / Delivery Notes:</strong>
-            <p style="margin: 6px 0 0 0; font-size: 0.85rem; line-height: 1.4; color: var(--text-secondary);">${dispatch.remarks}</p>
-          </div>
-        ` : ''}
-
-        <div class="print-signature-section" style="margin-top: 60px;">
-          <div class="signature-box">
-            <p>Prepared By</p>
-            <span style="font-size: 0.72rem; color: var(--text-muted);">TSRP PLAST Warehouse</span>
-          </div>
-          <div class="signature-box">
-            <p>Driver / Carrier Signature</p>
-          </div>
-          <div class="signature-box">
-            <p>Receiver's Signature & Seal</p>
-          </div>
-        </div>
-
-        <div class="print-footer" style="margin-top: 50px;">
-          <p>This delivery challan acts as a gate pass and proof of shipment delivery.</p>
-          <p style="margin-top: 10px; font-weight: 500;">Thank you for your business!</p>
-        </div>
-      </div>
-    `;
+    fullHTML += buildDispatchPrintHTML(dispatch);
   });
 
   printArea.innerHTML = fullHTML;
@@ -4751,156 +4909,9 @@ function openPrintPreview(estimateId) {
   if (!estimate) return;
 
   const printArea = document.getElementById('print-area-container');
-  let materialRows = '';
-  // Group materials by partInstanceId to keep distinct loads separate
-  const partGroups = {};
-  estimate.items.forEach(item => {
-    const key = item.partInstanceId || 'Other';
-    if (!partGroups[key]) {
-      partGroups[key] = {
-        name: item.partName || 'Other/Custom',
-        items: []
-      };
-    }
-    partGroups[key].items.push(item);
-  });
-  // Build rows with part sub-headers
-  let partIndex = 1;
-  for (const [partInstanceId, group] of Object.entries(partGroups)) {
-    let partQty = 1;
-    let partPoNumber = '';
-    if (estimate.parts) {
-      const part = estimate.parts.find(p => p.id === partInstanceId);
-      if (part) {
-        partQty = part.quantity || 1;
-        partPoNumber = part.poNumber || '';
-      }
-    }
-    
-    // Fallback search in templates catalog
-    if (!partPoNumber) {
-      const template = state.templatesCatalog.find(t => t.name === group.name || t.id === estimate.templateId);
-      if (template) {
-        partPoNumber = template.poNumber || '';
-      }
-    }
-
-    materialRows += `
-      <tr class="print-part-header">
-        <td colspan="3" style="font-weight: 600; background: var(--bg-card); padding: 6px;">Part ${partIndex}: ${group.name} (Qty: ${partQty})${partPoNumber ? ` — PO No: ${partPoNumber}` : ''}</td>
-      </tr>`;
-    partIndex++;
-    const items = group.items;
-    items.forEach(it => {
-      let weightDesc = '';
-      if ((it.componentWeight || 0) > 0 || (it.runnerWeight || 0) > 0) {
-        const u = it.weightUnit || 'g';
-        weightDesc = `
-          <div>Comp. Wt: ${it.componentWeight || 0}${u}</div>
-          <div style="margin-top: 2px;">Runner Wt: ${it.runnerWeight || 0}${u}</div>
-        `;
-      } else {
-        weightDesc = '-';
-      }
-      materialRows += `
-        <tr>
-          <td>
-            <div style="font-weight: 600;">${it.name}</div>
-            <div style="font-size: 0.72rem; color: rgba(128, 128, 128, 0.85); font-family: monospace; display: flex; flex-wrap: wrap; gap: 8px;">
-              ${it.itemCode ? `<span>Code: ${it.itemCode}</span>` : ''}
-              ${it.invoiceNumber ? `<span>INV: ${it.invoiceNumber}</span>` : ''}
-            </div>
-          </td>
-          <td style="font-size: 0.82rem; color: #475569; line-height: 1.3;">${weightDesc}</td>
-          <td style="text-align: right; font-weight: 500;">${formatWeightForDisplay(it.calculatedQty, it.unit)}</td>
-        </tr>`;
-    });
+  if (printArea) {
+    printArea.innerHTML = buildEstimatePrintHTML(estimate);
   }
-
-  const dateStr = estimate.date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  const timeStr = estimate.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-  printArea.innerHTML = `
-    <div class="estimate-print-sheet">
-      <div class="print-header">
-        <div class="print-logo-details">
-          <h2>TSRP<br>PLAST</h2>
-          <p>Professional Manufacturing & Engineering Services</p>
-        </div>
-        <div class="print-meta-details">
-          <h3>Work Estimate</h3>
-          <p><strong>Date Generated:</strong> ${dateStr}</p>
-          <p><strong>Time Generated:</strong> ${timeStr}</p>
-        </div>
-      </div>
-      
-      <div class="print-addresses" style="grid-template-columns: 1fr;">
-        <div class="print-address-box">
-          <h4>Project Details</h4>
-          <p><strong>Project Title:</strong> ${estimate.title}</p>
-          <p><strong>Production Qty:</strong> ${estimate.quantity} unit(s)</p>
-          <p><strong>Total Mfg. Time:</strong> ${formatDurationString(estimate.totals ? estimate.totals.totalMfgSeconds : 0)}</p>
-          ${estimate.parts && estimate.parts.length > 1 ? `
-            <div style="font-size: 0.8rem; color: #475569; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0;">
-              <strong>Time Breakdown by Part:</strong>
-              <ul style="margin: 4px 0 0 0; padding-left: 20px;">
-                ${estimate.parts.map((p, idx) => `<li>Part ${idx + 1} (${p.name}): ${formatDurationString(convertToSeconds(p.mfgTime, p.mfgTimeUnit) * (p.quantity || 1))} (Qty: ${p.quantity || 1})</li>`).join('')}
-              </ul>
-            </div>
-          ` : ''}
-        </div>
-      </div>
-
-      <table class="print-table">
-        <thead>
-          <tr>
-            <th style="width: 40%;">Raw Material</th>
-            <th style="width: 35%;">Weight Detail</th>
-            <th style="width: 25%; text-align: right;">Calculated Qty</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${materialRows}
-        </tbody>
-      </table>
-
-      <div class="print-totals-section" style="display: none;">
-        <table class="print-totals-table">
-          <tr>
-            <td class="lbl">Raw Material Total:</td>
-            <td class="val">${formatCurrency(estimate.totals.materialsCost)}</td>
-          </tr>
-          <tr>
-            <td class="lbl">Workshop Production Cost:</td>
-            <td class="val">${formatCurrency(estimate.totals.baseCost)}</td>
-          </tr>
-          <tr>
-            <td class="lbl">Markup / Client Margin (${estimate.markup}%):</td>
-            <td class="val">${formatCurrency(estimate.totals.markupAmount)}</td>
-          </tr>
-          <tr class="grand-total">
-            <td class="lbl">Grand Total Quote:</td>
-            <td class="val">${formatCurrency(estimate.totals.finalPrice)}</td>
-          </tr>
-        </table>
-      </div>
-
-      <div class="print-signature-section">
-        <div class="signature-box">
-          <p>Prepared By</p>
-          <span>TSRP PLAST Authorized Estimator</span>
-        </div>
-        <div class="signature-box">
-          <p>Person Acceptance</p>
-        </div>
-      </div>
-
-      <div class="print-footer">
-        <p>This document is an engineering/manufacturing material and duration estimate valid for 30 days.</p>
-        <p style="margin-top: 10px; font-weight: 500;">Thank you for your business!</p>
-      </div>
-    </div>
-  `;
 
   const printModalTitle = document.querySelector('#print-modal h3');
   if (printModalTitle) {
@@ -6318,6 +6329,17 @@ function initVoiceSearch() {
 
 // --- Core Event Listeners & Bootstrapping ---
 document.addEventListener('DOMContentLoaded', async () => {
+  // Handle public link viewer
+  const urlParams = new URLSearchParams(window.location.search);
+  const viewType = urlParams.get('view');
+  const viewId = urlParams.get('id');
+
+  if (viewType && viewId) {
+    document.body.classList.add('public-viewer');
+    initPublicViewer(viewType, viewId);
+    return;
+  }
+
   // Bind all Auth Event Listeners
   const loginForm = document.getElementById('auth-login-form');
   if (loginForm) loginForm.addEventListener('submit', handleLoginSubmit);
@@ -6660,6 +6682,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         msg += `*Total Raw Material Cost:* ₹${totalMaterialsCost.toFixed(2)}\n`;
         msg += `*Final Quote Price:* ₹${finalPrice.toFixed(2)}\n`;
         msg += `--------------------------------\n`;
+        msg += `*View/Print Invoice:* ${window.location.origin}/?view=estimate&id=${id}\n`;
+        msg += `--------------------------------\n`;
         msg += `Generated via TSRP Plast Manager.`;
       } else if (type === 'dispatch') {
         const idsStr = whatsappShareBtn.getAttribute('data-ids');
@@ -6687,6 +6711,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           msg += `*Date:* ${dispatch.date || ''}\n`;
         });
         
+        msg += `--------------------------------\n`;
+        msg += `*View/Print Challan:* ${window.location.origin}/?view=dispatch&id=${ids.join(',')}\n`;
         msg += `--------------------------------\n`;
         msg += `Generated via TSRP Plast Manager.`;
       }
@@ -7064,3 +7090,154 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 });
+
+async function initPublicViewer(viewType, viewId) {
+  const container = document.getElementById('public-viewer-container');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; font-family: var(--font-body); color: var(--text-secondary);">
+      <div style="width: 40px; height: 40px; border: 3px solid rgba(99, 102, 241, 0.1); border-top-color: var(--accent-primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px;"></div>
+      <p style="font-weight: 500; font-size: 0.95rem;">Retrieving document, please wait...</p>
+    </div>
+  `;
+
+  // Define keyframes for loading spinner dynamically if not present
+  if (!document.getElementById('public-spinner-style')) {
+    const style = document.createElement('style');
+    style.id = 'public-spinner-style';
+    style.innerHTML = `@keyframes spin { to { transform: rotate(360deg); } }`;
+    document.head.appendChild(style);
+  }
+
+  let htmlContent = '';
+  let docTitle = 'Document Viewer';
+
+  try {
+    if (viewType === 'estimate') {
+      let estimate = null;
+      // 1. Try to fetch from Supabase if active
+      if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        const { data, error } = await supabaseClient
+          .from('estimates')
+          .select('*')
+          .eq('id', viewId)
+          .maybeSingle();
+        if (data) {
+          estimate = {
+            id: data.id,
+            title: data.title,
+            clientName: data.client_name || '',
+            quantity: parseInt(data.quantity) || 1,
+            markup: parseFloat(data.markup) || 30,
+            items: data.items || [],
+            labor: data.labor || [],
+            mfgTime: parseFloat(data.mfg_time) || 0,
+            mfgTimeUnit: data.mfg_time_unit || 'sec',
+            templateId: data.template_id || null,
+            parts: data.parts || [],
+            totals: data.totals || {},
+            date: data.date,
+            time: data.time
+          };
+        }
+      }
+      // 2. Fallback to LocalStorage
+      if (!estimate) {
+        let localEsts = [];
+        try {
+          localEsts = JSON.parse(localStorage.getItem('ws_estimates')) || [];
+        } catch (e) {}
+        estimate = localEsts.find(e => e.id === viewId);
+      }
+
+      if (estimate) {
+        docTitle = `Estimate: ${estimate.title || 'Quote'}`;
+        htmlContent = buildEstimatePrintHTML(estimate);
+      } else {
+        throw new Error('Estimate not found.');
+      }
+
+    } else if (viewType === 'dispatch') {
+      let dispatches = [];
+      const ids = viewId.split(',');
+
+      // 1. Try to fetch from Supabase if active
+      if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        const { data, error } = await supabaseClient
+          .from('dispatches')
+          .select('*')
+          .in('id', ids);
+        if (data && data.length > 0) {
+          dispatches = data.map(d => ({
+            id: d.id,
+            clientName: d.client_name || '',
+            estimateTitle: d.estimate_title || '',
+            gatePass: d.gate_pass || '',
+            vehicleNumber: d.vehicle_number || '',
+            driverName: d.driver_name || '',
+            status: d.status || '',
+            remarks: d.remarks || '',
+            date: d.date,
+            time: d.time,
+            items: d.items || []
+          }));
+        }
+      }
+      // 2. Fallback to LocalStorage
+      if (dispatches.length === 0) {
+        let localDisps = [];
+        try {
+          localDisps = JSON.parse(localStorage.getItem('ws_dispatches')) || [];
+        } catch (e) {}
+        dispatches = localDisps.filter(d => ids.includes(d.id));
+      }
+
+      if (dispatches.length > 0) {
+        docTitle = dispatches.length === 1 ? `Challan: ${dispatches[0].gatePass || dispatches[0].id}` : 'Multiple Challans';
+        dispatches.forEach(dispatch => {
+          htmlContent += buildDispatchPrintHTML(dispatch);
+        });
+      } else {
+        throw new Error('Dispatch Pass(es) not found.');
+      }
+    } else {
+      throw new Error('Invalid document type.');
+    }
+
+    document.title = `${docTitle} - TSRP Plast`;
+
+    // Render header bar and the sheet
+    container.innerHTML = `
+      <div class="public-viewer-header no-print" style="max-width: 850px; margin: 0 auto 20px; display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 12px 24px; border-radius: var(--border-radius-md); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); font-family: var(--font-body);">
+        <span style="font-weight: 700; font-size: 0.95rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+          </svg>
+          TSRP PLAST Document Viewer
+        </span>
+        <button id="public-print-btn" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; height: 36px; padding: 0 16px; border: none; background: #4f46e5; color: #ffffff; font-weight: 600; border-radius: var(--border-radius-sm); cursor: pointer; transition: background 0.2s;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          Print / Save PDF
+        </button>
+      </div>
+      <div class="public-viewer-body">
+        ${htmlContent}
+      </div>
+    `;
+
+    document.getElementById('public-print-btn').addEventListener('click', () => {
+      window.print();
+    });
+
+  } catch (err) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 50px 20px; font-family: var(--font-body); color: var(--text-secondary); background: #ffffff; border-radius: var(--border-radius-md); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <h4 style="color: #ef4444; font-size: 1.1rem; margin-bottom: 8px;">Document Retrieval Failed</h4>
+        <p style="font-size: 0.9rem; max-width: 400px; margin: 0 auto 16px;">${err.message || 'The requested document could not be loaded.'}</p>
+        <p style="font-size: 0.8rem; color: var(--text-muted);">Please make sure the link is correct, or verify that the record exists in the database.</p>
+      </div>
+    `;
+  }
+}

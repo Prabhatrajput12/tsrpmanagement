@@ -2636,3 +2636,57 @@ a:hover {
   border-color: rgba(100, 116, 139, 0.2);
 }
 
+/* Public Document Viewer Layout */
+body.public-viewer {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  padding: 40px 16px !important;
+  display: block !important;
+  overflow-y: auto !important;
+  min-height: 100vh !important;
+}
+
+body.public-viewer #app-container,
+body.public-viewer #auth-overlay,
+body.public-viewer .sidebar-toggle-btn,
+body.public-viewer #print-modal {
+  display: none !important;
+}
+
+body.public-viewer #public-viewer-container {
+  display: block !important;
+}
+
+#public-viewer-container {
+  max-width: 850px;
+  margin: 0 auto;
+}
+
+.public-viewer-body {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  border-radius: var(--border-radius-md);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+@media print {
+  body.public-viewer {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  #public-viewer-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+  .public-viewer-body {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+  }
+}
