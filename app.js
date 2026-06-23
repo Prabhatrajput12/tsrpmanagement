@@ -4664,6 +4664,13 @@ function openPrintPreviewForMultipleDispatches(dispatchIds) {
     }
   }
 
+  const whatsappShareBtn = document.getElementById('whatsapp-share-btn');
+  if (whatsappShareBtn) {
+    whatsappShareBtn.setAttribute('data-type', 'dispatch');
+    whatsappShareBtn.setAttribute('data-ids', JSON.stringify(dispatchIds));
+    whatsappShareBtn.style.display = 'inline-flex';
+  }
+
   document.getElementById('print-modal').classList.add('active');
 }
 
@@ -4900,6 +4907,13 @@ function openPrintPreview(estimateId) {
     printModalTitle.innerText = "Estimate Quote PDF Preview";
   }
 
+  const whatsappShareBtn = document.getElementById('whatsapp-share-btn');
+  if (whatsappShareBtn) {
+    whatsappShareBtn.setAttribute('data-type', 'estimate');
+    whatsappShareBtn.setAttribute('data-id', estimateId);
+    whatsappShareBtn.style.display = 'inline-flex';
+  }
+
   document.getElementById('print-modal').classList.add('active');
 }
 
@@ -5022,6 +5036,11 @@ function openSummaryPrintPreview() {
     printModalTitle.innerText = "Quote History PDF Preview";
   }
 
+  const whatsappShareBtn = document.getElementById('whatsapp-share-btn');
+  if (whatsappShareBtn) {
+    whatsappShareBtn.style.display = 'none';
+  }
+
   document.getElementById('print-modal').classList.add('active');
 }
 
@@ -5124,6 +5143,11 @@ function openPrintPreviewForLedger() {
   const printModalTitle = document.querySelector('#print-modal h3');
   if (printModalTitle) {
     printModalTitle.innerText = "Stock Ledger PDF Preview";
+  }
+
+  const whatsappShareBtn = document.getElementById('whatsapp-share-btn');
+  if (whatsappShareBtn) {
+    whatsappShareBtn.style.display = 'none';
   }
 
   document.getElementById('print-modal').classList.add('active');
@@ -6607,6 +6631,81 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('execute-print-btn').addEventListener('click', () => {
     window.print();
   });
+
+  const whatsappShareBtn = document.getElementById('whatsapp-share-btn');
+  if (whatsappShareBtn) {
+    whatsappShareBtn.addEventListener('click', () => {
+      const type = whatsappShareBtn.getAttribute('data-type');
+      let msg = '';
+      
+      if (type === 'estimate') {
+        const id = whatsappShareBtn.getAttribute('data-id');
+        const estimate = state.savedEstimates.find(x => x.id === id) || state.activeEstimate;
+        if (!estimate) return;
+        
+        let totalMaterialsCost = 0;
+        let totalWeight = 0;
+        if (estimate.totals) {
+          totalMaterialsCost = estimate.totals.materialsCost || estimate.totals.totalMaterialCost || 0;
+          totalWeight = estimate.totals.totalWeight || 0;
+        }
+        const finalPrice = estimate.totals?.finalPrice || 0;
+        
+        msg = `*TSRP PLAST ESTIMATE QUOTE*\n`;
+        msg += `--------------------------------\n`;
+        msg += `*Title:* ${estimate.title || 'Estimate Quote'}\n`;
+        if (estimate.clientName) msg += `*Client:* ${estimate.clientName}\n`;
+        msg += `*Date:* ${estimate.date || new Date().toLocaleDateString('en-IN')}\n`;
+        msg += `*Total Weight:* ${totalWeight.toFixed(2)} kg\n`;
+        msg += `*Total Raw Material Cost:* ₹${totalMaterialsCost.toFixed(2)}\n`;
+        msg += `*Final Quote Price:* ₹${finalPrice.toFixed(2)}\n`;
+        msg += `--------------------------------\n`;
+        msg += `Generated via TSRP Plast Manager.`;
+      } else if (type === 'dispatch') {
+        const idsStr = whatsappShareBtn.getAttribute('data-ids');
+        let ids = [];
+        try {
+          ids = JSON.parse(idsStr) || [];
+        } catch (e) {}
+        
+        if (ids.length === 0) return;
+        
+        msg = `*TSRP PLAST DISPATCH GATE PASS*\n`;
+        msg += `--------------------------------\n`;
+        
+        ids.forEach((id, idx) => {
+          const dispatch = state.dispatches.find(d => d.id === id);
+          if (!dispatch) return;
+          
+          if (idx > 0) msg += `\n`;
+          msg += `*Gate Pass:* ${dispatch.gatePass || dispatch.id}\n`;
+          msg += `*Client:* ${dispatch.clientName || '-'}\n`;
+          msg += `*Part/Estimate:* ${dispatch.items.map(it => it.name).join(' + ')}\n`;
+          msg += `*Vehicle No:* ${dispatch.vehicleNumber || 'Self-Pickup / N/A'}\n`;
+          msg += `*Driver Name:* ${dispatch.driverName || 'N/A'}\n`;
+          msg += `*Status:* ${dispatch.status || 'N/A'}\n`;
+          msg += `*Date:* ${dispatch.date || ''}\n`;
+        });
+        
+        msg += `--------------------------------\n`;
+        msg += `Generated via TSRP Plast Manager.`;
+      }
+      
+      if (!msg) return;
+      
+      const phone = prompt("Enter phone number to send WhatsApp message (with country code, e.g. 919876543210):");
+      if (phone === null) return; // User cancelled
+      
+      const encodedText = encodeURIComponent(msg);
+      let url = '';
+      if (phone.trim()) {
+        url = `https://wa.me/${phone.trim().replace(/\+/g, '').replace(/[^0-9]/g, '')}?text=${encodedText}`;
+      } else {
+        url = `https://api.whatsapp.com/send?text=${encodedText}`;
+      }
+      window.open(url, '_blank');
+    });
+  }
 
   // Print summary report
   const printSummaryBtn = document.getElementById('print-summary-report-btn');
