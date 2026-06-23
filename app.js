@@ -514,13 +514,17 @@ function setupAuthStateListener() {
 }
 
 async function handleLogout() {
+  sessionStorage.removeItem('ws_is_logged_in');
+  sessionStorage.removeItem('ws_current_user');
   if (supabaseClient) {
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) console.error("Error signing out:", error);
-  } else {
-    sessionStorage.removeItem('ws_is_logged_in');
-    window.location.reload();
+    try {
+      const { error } = await supabaseClient.auth.signOut();
+      if (error) console.error("Error signing out:", error);
+    } catch (e) {
+      console.error("Supabase signOut error:", e);
+    }
   }
+  window.location.reload();
 }
 
 async function handleLoginSubmit(e) {
