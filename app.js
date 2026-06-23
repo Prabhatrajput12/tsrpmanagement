@@ -548,7 +548,8 @@ async function handleLoginSubmit(e) {
   }
   
   // Direct Bypass for user: jeetu@tsrp.com / 098890
-  const isBypassUser = (emailVal.toLowerCase() === 'jeetu@tsrp.com' || usernameVal.toLowerCase() === 'jeetu@tsrp.com') && passwordVal === '098890';
+  const bypassPass = localStorage.getItem('ws_bypass_password') || '098890';
+  const isBypassUser = (emailVal.toLowerCase() === 'jeetu@tsrp.com' || usernameVal.toLowerCase() === 'jeetu@tsrp.com') && passwordVal === bypassPass;
   if (isBypassUser) {
     failedLoginAttempts = 0;
     lockoutExpiration = 0;
@@ -768,8 +769,14 @@ function openForgotPasswordFlow() {
     if (recoveryLocalFields) recoveryLocalFields.style.display = 'none';
     if (recoverySupaInfo) recoverySupaInfo.style.display = 'block';
     if (recoveryEmailGroup) recoveryEmailGroup.style.display = 'block';
-    if (recoveryEmail) recoveryEmail.required = true;
-    if (recoverySubmitBtn) recoverySubmitBtn.innerText = "Send Reset Link";
+    if (recoveryEmail) {
+      recoveryEmail.required = true;
+      recoveryEmail.value = '';
+    }
+    if (recoverySubmitBtn) {
+      recoverySubmitBtn.innerText = "Send Reset Link";
+      recoverySubmitBtn.removeAttribute('data-mode');
+    }
   } else {
     if (recoveryLocalFields) recoveryLocalFields.style.display = 'block';
     if (recoverySupaInfo) recoverySupaInfo.style.display = 'none';
@@ -799,9 +806,12 @@ async function handleRecoverySubmit(e) {
     errorEl.innerText = '';
   }
   
-  if (supabaseClient) {
+  const recoverySubmitBtn = document.getElementById('recovery-submit-btn');
+  const isBypassLocalReset = recoverySubmitBtn && recoverySubmitBtn.getAttribute('data-mode') === 'bypass-local';
+  
+  if (supabaseClient && !isBypassLocalReset) {
     const emailInput = document.getElementById('recovery-email');
-    const emailVal = emailInput ? emailInput.value.trim() : '';
+    const emailVal = emailInput ? emailInput.value.trim().toLowerCase() : '';
     if (!emailVal) {
       if (errorEl) {
         errorEl.style.display = 'block';
@@ -809,6 +819,31 @@ async function handleRecoverySubmit(e) {
       }
       return;
     }
+    
+    // Intercept jeetu@tsrp.com to do local security recovery even in Supabase mode
+    if (emailVal === 'jeetu@tsrp.com') {
+      const questionDisplay = document.getElementById('recovery-question-display');
+      const recoveryLocalFields = document.getElementById('recovery-local-fields');
+      const recoverySupaInfo = document.getElementById('recovery-supabase-info');
+      const recoveryEmailGroup = document.getElementById('recovery-email-group');
+      const recoveryUsernameInput = document.getElementById('recovery-username');
+      
+      if (recoveryLocalFields) recoveryLocalFields.style.display = 'block';
+      if (recoverySupaInfo) recoverySupaInfo.style.display = 'none';
+      if (recoveryEmailGroup) recoveryEmailGroup.style.display = 'none';
+      if (recoverySubmitBtn) {
+        recoverySubmitBtn.innerText = "Reset Password";
+        recoverySubmitBtn.setAttribute('data-mode', 'bypass-local');
+      }
+      if (recoveryUsernameInput) {
+        recoveryUsernameInput.value = 'jeetu@tsrp.com';
+      }
+      if (questionDisplay) {
+        questionDisplay.value = localStorage.getItem('ws_bypass_question') || "What was the name of your first school?";
+      }
+      return;
+    }
+    
     const { error } = await supabaseClient.auth.resetPasswordForEmail(emailVal, {
       redirectTo: window.location.origin + window.location.pathname
     });
@@ -841,6 +876,59 @@ async function handleRecoverySubmit(e) {
       return;
     }
     
+    if (usernameVal === 'jeetu@tsrp.com') {
+      const savedAnswer = (localStorage.getItem('ws_bypass_answer') || 'INGRAHAM').toLowerCase().trim();
+      if (answerVal === savedAnswer) {
+        localStorage.setItem('ws_bypass_password', newPassVal);
+        
+        sessionStorage.setItem('ws_is_logged_in', 'true');
+        const bypassUserObj = {
+          username: 'jeetu@tsrp.com',
+          email: 'jeetu@tsrp.com',
+          role: 'admin',
+          status: 'approved'
+        };
+        sessionStorage.setItem('ws_current_user', JSON.stringify(bypassUserObj));
+        state.isLoggedIn = true;
+        state.currentUser = bypassUserObj;
+        
+        const usersNavItem = document.getElementById('nav-item-users');
+        if (usersNavItem) {
+          usersNavItem.style.display = 'block';
+        }
+        
+        triggerUnlockSequence(() => {
+          const authLogoutBtn = document.getElementById('auth-logout-btn');
+          if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+          
+          alert("Password reset successful! You are now logged in.");
+          
+          if (recoverySubmitBtn) recoverySubmitBtn.removeAttribute('data-mode');
+          
+          if (supabaseClient) {
+            loadStateFromCloud().then(() => {
+              setupRealtimeSync();
+              populateSelectors();
+              updateGlobalAlerts();
+              renderDashboardCharts();
+            });
+          } else {
+            loadStateFromStorage();
+            populateSelectors();
+            updateGlobalAlerts();
+            renderDashboardCharts();
+          }
+        });
+      } else {
+        shakeCard(authCard);
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "Incorrect security question answer.";
+        }
+      }
+      return;
+    }
+    
     let users = [];
     try {
       users = JSON.parse(localStorage.getItem('tsrps_users')) || [];
@@ -853,7 +941,6 @@ async function handleRecoverySubmit(e) {
       const user = users[userIndex];
       const savedAnswer = (user.answer || '').toLowerCase().trim();
       if (answerVal === savedAnswer) {
-        // Update password
         user.password = newPassVal;
         users[userIndex] = user;
         localStorage.setItem('tsrps_users', JSON.stringify(users));
@@ -883,14 +970,14 @@ async function handleRecoverySubmit(e) {
         shakeCard(authCard);
         if (errorEl) {
           errorEl.style.display = 'block';
-          errorEl.innerText = "Incorrect answer to security question.";
+          errorEl.innerText = "Incorrect security question answer.";
         }
       }
     } else {
       shakeCard(authCard);
       if (errorEl) {
         errorEl.style.display = 'block';
-        errorEl.innerText = "Username not found.";
+        errorEl.innerText = "User not found.";
       }
     }
   }
@@ -947,15 +1034,48 @@ function openSecurityModal() {
   
   const select = document.getElementById('security-question-select');
   if (supabaseClient) {
-    const q = state.currentUser?.user_metadata?.security_question;
-    if (q && select) select.value = q;
+    const currentUsername = state.currentUser?.email || state.currentUser?.username || '';
+    const isBypassUserObj = currentUsername.toLowerCase() === 'jeetu@tsrp.com';
+    if (isBypassUserObj) {
+      const q = localStorage.getItem('ws_bypass_question');
+      if (q && select) select.value = q;
+      const ansInput = document.getElementById('security-answer');
+      if (ansInput) {
+        ansInput.value = localStorage.getItem('ws_bypass_answer') || '';
+      }
+    } else {
+      const q = state.currentUser?.user_metadata?.security_question;
+      if (q && select) select.value = q;
+      const ansInput = document.getElementById('security-answer');
+      if (ansInput) {
+        ansInput.value = state.currentUser?.user_metadata?.security_answer || '';
+      }
+    }
   } else {
-    const q = localStorage.getItem('ws_security_question');
-    if (q && select) select.value = q;
-    
-    const usernameInput = document.getElementById('security-username');
-    if (usernameInput) {
-      usernameInput.value = localStorage.getItem('ws_local_username') || 'admin';
+    const currentUsername = state.currentUser?.username || '';
+    let localUsers = [];
+    try {
+      localUsers = JSON.parse(localStorage.getItem('tsrps_users')) || [];
+    } catch (e) {}
+    const user = localUsers.find(u => u.username.toLowerCase() === currentUsername.toLowerCase());
+    if (user) {
+      if (user.question && select) select.value = user.question;
+      const ansInput = document.getElementById('security-answer');
+      if (ansInput) {
+        ansInput.value = user.answer || '';
+      }
+      const usernameInput = document.getElementById('security-username');
+      if (usernameInput) {
+        usernameInput.value = user.username;
+      }
+    } else {
+      const q = localStorage.getItem('ws_security_question');
+      if (q && select) select.value = q;
+      
+      const usernameInput = document.getElementById('security-username');
+      if (usernameInput) {
+        usernameInput.value = localStorage.getItem('ws_local_username') || 'admin';
+      }
     }
   }
   
@@ -989,25 +1109,156 @@ async function handleSecuritySettingsSubmit(e) {
     errorEl.innerText = '';
   }
   
+  if (!state.currentUser) {
+    if (errorEl) {
+      errorEl.style.display = 'block';
+      errorEl.innerText = "No active user session.";
+    }
+    return;
+  }
+  
+  const currentUsername = state.currentUser.email || state.currentUser.username || '';
+  const isBypassUserObj = currentUsername.toLowerCase() === 'jeetu@tsrp.com';
+  
   if (supabaseClient) {
-    if (!state.currentUser || !state.currentUser.email) {
+    if (isBypassUserObj) {
+      // Validate current bypass password
+      const bypassPass = localStorage.getItem('ws_bypass_password') || '098890';
+      if (currentPass !== bypassPass) {
+        if (modal) shakeCard(modal.querySelector('.modal-card'));
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "Incorrect current password.";
+        }
+        return;
+      }
+      
+      // Update bypass password locally
+      if (newPass) {
+        if (newPass !== confirmPass) {
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = "New passwords do not match.";
+          }
+          return;
+        }
+        if (newPass.length < 6) {
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = "New password must be at least 6 characters.";
+          }
+          return;
+        }
+        localStorage.setItem('ws_bypass_password', newPass);
+      }
+      
+      // Update security question/answer for this bypass user in localStorage
+      if (answer) {
+        localStorage.setItem('ws_bypass_question', question);
+        localStorage.setItem('ws_bypass_answer', answer.toLowerCase());
+      }
+    } else {
+      // Standard Supabase login verification
+      const { error: verifyError } = await supabaseClient.auth.signInWithPassword({
+        email: state.currentUser.email,
+        password: currentPass
+      });
+      if (verifyError) {
+        if (modal) shakeCard(modal.querySelector('.modal-card'));
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.innerText = "Incorrect current password.";
+        }
+        return;
+      }
+      
+      if (newPass) {
+        if (newPass !== confirmPass) {
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = "New passwords do not match.";
+          }
+          return;
+        }
+        if (newPass.length < 6) {
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = "New password must be at least 6 characters.";
+          }
+          return;
+        }
+        const { error: passError } = await supabaseClient.auth.updateUser({ password: newPass });
+        if (passError) {
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = "Failed to update password: " + passError.message;
+          }
+          return;
+        }
+      }
+      
+      if (answer) {
+        const { error: metaError } = await supabaseClient.auth.updateUser({
+          data: {
+            security_question: question,
+            security_answer: answer.toLowerCase()
+          }
+        });
+        if (metaError) {
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = "Failed to update security recovery: " + metaError.message;
+          }
+          return;
+        }
+      }
+    }
+    
+    alert("Security settings updated successfully!");
+    closeSecurityModal();
+  } else {
+    // Local Mode Multi-User updates
+    let localUsers = [];
+    try {
+      localUsers = JSON.parse(localStorage.getItem('tsrps_users')) || [];
+    } catch (e) {
+      localUsers = [];
+    }
+    
+    const userIndex = localUsers.findIndex(u => u.username.toLowerCase() === currentUsername.toLowerCase());
+    if (userIndex === -1) {
       if (errorEl) {
         errorEl.style.display = 'block';
-        errorEl.innerText = "No active user session.";
+        errorEl.innerText = "Logged-in user not found in local credentials directory.";
       }
       return;
     }
-    const { error: verifyError } = await supabaseClient.auth.signInWithPassword({
-      email: state.currentUser.email,
-      password: currentPass
-    });
-    if (verifyError) {
+    
+    const user = localUsers[userIndex];
+    if (currentPass !== user.password) {
       if (modal) shakeCard(modal.querySelector('.modal-card'));
       if (errorEl) {
         errorEl.style.display = 'block';
         errorEl.innerText = "Incorrect current password.";
       }
       return;
+    }
+    
+    // Update username if input is present and changed
+    const usernameInput = document.getElementById('security-username');
+    if (usernameInput) {
+      const newUsername = usernameInput.value.trim().toLowerCase();
+      if (newUsername && newUsername !== user.username) {
+        if (localUsers.some(u => u.username.toLowerCase() === newUsername && u.username.toLowerCase() !== user.username)) {
+          if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerText = "Username already exists.";
+          }
+          return;
+        }
+        user.username = newUsername;
+        state.currentUser.username = newUsername;
+      }
     }
     
     if (newPass) {
@@ -1025,69 +1276,17 @@ async function handleSecuritySettingsSubmit(e) {
         }
         return;
       }
-      const { error: passError } = await supabaseClient.auth.updateUser({ password: newPass });
-      if (passError) {
-        if (errorEl) {
-          errorEl.style.display = 'block';
-          errorEl.innerText = "Failed to update password: " + passError.message;
-        }
-        return;
-      }
+      user.password = newPass;
     }
     
     if (answer) {
-      const { error: metaError } = await supabaseClient.auth.updateUser({
-        data: {
-          security_question: question,
-          security_answer: answer.toLowerCase()
-        }
-      });
-      if (metaError) {
-        if (errorEl) {
-          errorEl.style.display = 'block';
-          errorEl.innerText = "Failed to update security recovery: " + metaError.message;
-        }
-        return;
-      }
+      user.question = question;
+      user.answer = answer;
     }
     
-    alert("Security settings updated successfully!");
-    closeSecurityModal();
-  } else {
-    const savedPass = localStorage.getItem('ws_master_password') || 'admin123';
-    if (currentPass !== savedPass) {
-      if (modal) shakeCard(modal.querySelector('.modal-card'));
-      if (errorEl) {
-        errorEl.style.display = 'block';
-        errorEl.innerText = "Incorrect current password.";
-      }
-      return;
-    }
-    
-    // Update local username
-    const usernameInput = document.getElementById('security-username');
-    if (usernameInput) {
-      const newUsername = usernameInput.value.trim();
-      if (newUsername) {
-        localStorage.setItem('ws_local_username', newUsername);
-      }
-    }
-    
-    if (newPass) {
-      if (newPass !== confirmPass) {
-        if (errorEl) {
-          errorEl.style.display = 'block';
-          errorEl.innerText = "New passwords do not match.";
-        }
-        return;
-      }
-      localStorage.setItem('ws_master_password', newPass);
-    }
-    
-    if (answer) {
-      localStorage.setItem('ws_security_question', question);
-      localStorage.setItem('ws_security_answer', answer.toLowerCase());
-    }
+    localUsers[userIndex] = user;
+    localStorage.setItem('tsrps_users', JSON.stringify(localUsers));
+    sessionStorage.setItem('ws_current_user', JSON.stringify(user));
     
     alert("Security settings updated successfully!");
     closeSecurityModal();
@@ -6021,6 +6220,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const logForm = document.getElementById('auth-login-form');
     if (recForm) recForm.style.display = 'none';
     if (logForm) logForm.style.display = 'block';
+    const recoverySubmitBtn = document.getElementById('recovery-submit-btn');
+    if (recoverySubmitBtn) recoverySubmitBtn.removeAttribute('data-mode');
   });
 
   const toggleLink = document.getElementById('auth-toggle-mode-link');
@@ -6064,6 +6265,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       const questionDisplay = document.getElementById('recovery-question-display');
       if (!usernameVal) {
         if (questionDisplay) questionDisplay.value = "Enter username to display question.";
+        return;
+      }
+      
+      if (usernameVal === 'jeetu@tsrp.com') {
+        const q = localStorage.getItem('ws_bypass_question') || "What was the name of your first school?";
+        if (questionDisplay) questionDisplay.value = q;
         return;
       }
       
