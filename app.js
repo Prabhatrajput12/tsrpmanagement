@@ -5663,6 +5663,20 @@ function refreshActiveTabContent() {
 }
 
 // --- User Manager Helper Functions ---
+function showUserTableMissingError(msg) {
+  const warningEl = document.getElementById('users-panel-db-warning');
+  if (warningEl) {
+    warningEl.style.display = 'block';
+  }
+}
+
+function hideUserTableMissingError() {
+  const warningEl = document.getElementById('users-panel-db-warning');
+  if (warningEl) {
+    warningEl.style.display = 'none';
+  }
+}
+
 async function loadUsersList() {
   if (supabaseClient) {
     try {
@@ -5673,8 +5687,12 @@ async function loadUsersList() {
         
       if (error) {
         console.error("Error loading user permissions from Supabase:", error);
+        if (error.message && (error.message.includes('user_permissions') || error.message.includes('schema cache') || error.message.includes('does not exist'))) {
+          showUserTableMissingError(error.message);
+        }
         return [];
       }
+      hideUserTableMissingError();
       return data.map(u => ({
         username: u.email,
         role: u.role,
@@ -5872,11 +5890,22 @@ function initUsersPanel() {
       
       if (supabaseClient) {
         try {
-          const { data: existing } = await supabaseClient
+          const { data: existing, error: selectError } = await supabaseClient
             .from('user_permissions')
             .select('*')
             .eq('email', username.toLowerCase())
             .maybeSingle();
+            
+          if (selectError) {
+            if (errorEl) {
+              errorEl.style.display = 'block';
+              errorEl.innerText = selectError.message;
+            }
+            if (selectError.message && (selectError.message.includes('user_permissions') || selectError.message.includes('schema cache') || selectError.message.includes('does not exist'))) {
+              showUserTableMissingError(selectError.message);
+            }
+            return;
+          }
             
           if (existing) {
             if (errorEl) {
@@ -5947,6 +5976,10 @@ function initUsersPanel() {
 
 // --- Tab Controller ---
 function switchTab(tabId) {
+  if (tabId === 'users' && (!state.currentUser || state.currentUser.role !== 'admin')) {
+    switchTab('dashboard');
+    return;
+  }
   state.activeTab = tabId;
   
   document.querySelectorAll('.nav-item').forEach(item => {
@@ -6778,6 +6811,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (dbBtn) dbBtn.addEventListener('click', openDbModal);
   if (authDbBtn) authDbBtn.addEventListener('click', openDbModal);
+  
+  const warningSettingsLink = document.getElementById('db-warning-settings-link');
+  if (warningSettingsLink) {
+    warningSettingsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openDbModal();
+    });
+  }
 
   const closeDbModal = () => {
     if (dbModal) dbModal.classList.remove('active');

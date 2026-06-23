@@ -782,6 +782,12 @@
           </div>
         </header>
 
+        <!-- Database table missing warning banner -->
+        <div id="users-panel-db-warning" style="display: none; padding: 12px 16px; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--color-danger); border-radius: 8px; color: #fff; margin-bottom: 20px; font-size: 0.85rem; line-height: 1.4;">
+          <strong style="color: var(--color-danger);">⚠️ Missing Database Table:</strong> The table <code>user_permissions</code> was not found in your Supabase database. 
+          Please click on <a href="#" id="db-warning-settings-link" style="color: var(--accent-primary); text-decoration: underline; font-weight: 600;">Cloud DB Settings</a> in the sidebar, copy the SQL setup script, and run it in your Supabase SQL Editor to initialize the user manager table.
+        </div>
+
         <div class="grid-3" style="gap: 20px; align-items: start; margin-bottom: 24px;">
           <!-- Add User Card -->
           <div class="card grid-span-1" style="padding: 20px;">
