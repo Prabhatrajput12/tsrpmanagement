@@ -6659,6 +6659,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     whatsappShareBtn.addEventListener('click', () => {
       const type = whatsappShareBtn.getAttribute('data-type');
       let msg = '';
+      let filename = 'document.pdf';
+      let htmlContent = '';
       
       if (type === 'estimate') {
         const id = whatsappShareBtn.getAttribute('data-id');
@@ -6685,6 +6687,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         msg += `*View/Print Invoice:* ${window.location.origin}/?view=estimate&id=${id}\n`;
         msg += `--------------------------------\n`;
         msg += `Generated via TSRP Plast Manager.`;
+
+        filename = `Estimate_${(estimate.title || 'Quote').replace(/[^a-zA-Z0-9]/g, '_')}_${id}.pdf`;
+        htmlContent = buildEstimatePrintHTML(estimate);
+
       } else if (type === 'dispatch') {
         const idsStr = whatsappShareBtn.getAttribute('data-ids');
         let ids = [];
@@ -6715,21 +6721,119 @@ document.addEventListener('DOMContentLoaded', async () => {
         msg += `*View/Print Challan:* ${window.location.origin}/?view=dispatch&id=${ids.join(',')}\n`;
         msg += `--------------------------------\n`;
         msg += `Generated via TSRP Plast Manager.`;
+
+        filename = `GatePass_${ids.join('_')}.pdf`;
+        ids.forEach(id => {
+          const dispatch = state.dispatches.find(d => d.id === id);
+          if (dispatch) {
+            htmlContent += buildDispatchPrintHTML(dispatch);
+          }
+        });
       }
       
-      if (!msg) return;
+      if (!msg || !htmlContent) return;
       
       const phone = prompt("Enter phone number to send WhatsApp message (with country code, e.g. 919876543210):");
       if (phone === null) return; // User cancelled
       
-      const encodedText = encodeURIComponent(msg);
-      let url = '';
-      if (phone.trim()) {
-        url = `https://wa.me/${phone.trim().replace(/\+/g, '').replace(/[^0-9]/g, '')}?text=${encodedText}`;
-      } else {
-        url = `https://api.whatsapp.com/send?text=${encodedText}`;
+      // Let's create a temporary container off-screen to generate the PDF
+      const tempDiv = document.createElement('div');
+      tempDiv.className = 'pdf-export-container';
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      tempDiv.style.top = '-9999px';
+      tempDiv.innerHTML = htmlContent;
+      document.body.appendChild(tempDiv);
+      
+      // Configure html2pdf options
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      // Set loading state on button
+      const originalText = whatsappShareBtn.innerHTML;
+      whatsappShareBtn.innerHTML = `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:12px; height:12px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 1s linear infinite;"></span>Generating PDF...</span>`;
+      whatsappShareBtn.style.pointerEvents = 'none';
+
+      // Define quick spin animation style if not defined
+      if (!document.getElementById('spin-style')) {
+        const style = document.createElement('style');
+        style.id = 'spin-style';
+        style.innerHTML = `@keyframes spin { to { transform: rotate(360deg); } }`;
+        document.head.appendChild(style);
       }
-      window.open(url, '_blank');
+      
+      // Helper function to handle WhatsApp redirection
+      const redirectToWhatsApp = () => {
+        const encodedText = encodeURIComponent(msg);
+        let url = '';
+        if (phone.trim()) {
+          url = `https://wa.me/${phone.trim().replace(/\+/g, '').replace(/[^0-9]/g, '')}?text=${encodedText}`;
+        } else {
+          url = `https://api.whatsapp.com/send?text=${encodedText}`;
+        }
+        window.open(url, '_blank');
+      };
+
+      html2pdf().from(tempDiv).set(opt).outputPdf('blob').then(async (blob) => {
+        // Cleanup temp element
+        if (tempDiv.parentNode) {
+          document.body.removeChild(tempDiv);
+        }
+        
+        // Restore button state
+        whatsappShareBtn.innerHTML = originalText;
+        whatsappShareBtn.style.pointerEvents = 'auto';
+
+        const file = new File([blob], filename, { type: 'application/pdf' });
+        
+        // Check if Web Share API is available and can share file (e.g. mobile Safari/Chrome)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: filename,
+              text: msg
+            });
+          } catch (shareErr) {
+            console.error("Web share failed, fallback to download/redirect", shareErr);
+            // Download file
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            alert("PDF document downloaded! WhatsApp will now open. Please attach the downloaded PDF file in the chat.");
+            redirectToWhatsApp();
+          }
+        } else {
+          // Fallback: download PDF locally + open WhatsApp
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          alert("PDF document downloaded! WhatsApp will now open. Please attach the downloaded PDF file in the chat.");
+          redirectToWhatsApp();
+        }
+      }).catch((pdfErr) => {
+        console.error("PDF generation failed:", pdfErr);
+        if (tempDiv.parentNode) {
+          document.body.removeChild(tempDiv);
+        }
+        whatsappShareBtn.innerHTML = originalText;
+        whatsappShareBtn.style.pointerEvents = 'auto';
+        alert("PDF generation failed. Reverting to plain text share.");
+        redirectToWhatsApp();
+      });
     });
   }
 

@@ -2690,3 +2690,25 @@ body.public-viewer #public-viewer-container {
     background: #ffffff !important;
   }
 }
+
+/* PDF Export Styling Container to override dark theme variables */
+.pdf-export-container {
+  --bg-primary: #ffffff !important;
+  --bg-secondary: #f8fafc !important;
+  --bg-card: #f8fafc !important;
+  --border-color: #e2e8f0 !important;
+  --text-primary: #1e293b !important;
+  --text-secondary: #475569 !important;
+  --text-muted: #64748b !important;
+  background: #ffffff !important;
+  color: #1e293b !important;
+  padding: 20px !important;
+  width: 790px;
+  box-sizing: border-box;
+}
+.pdf-export-container .estimate-print-sheet {
+  box-shadow: none !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+  color: #1e293b !important;
+}
