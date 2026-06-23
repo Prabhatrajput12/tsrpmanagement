@@ -42,8 +42,9 @@ const state = {
 };
 
 // --- Supabase Cloud Client Setup ---
-const supabaseUrl = localStorage.getItem('supabase_url') || '';
-const supabaseKey = localStorage.getItem('supabase_key') || '';
+const isDbDisabled = localStorage.getItem('supabase_disabled') === 'true';
+const supabaseUrl = isDbDisabled ? '' : (localStorage.getItem('supabase_url') || 'https://yiuyhfwlfzqxlsswavtu.supabase.co');
+const supabaseKey = isDbDisabled ? '' : (localStorage.getItem('supabase_key') || 'sb_publishable_JqDtlH42YtqajUrXDhjN3A_pzjp5yhy');
 let supabaseClient = null;
 let isLocalWriting = false;
 let localWriteTimeout = null;
@@ -6865,8 +6866,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dbStatusEl = document.getElementById('db-status-message');
 
   const openDbModal = () => {
-    if (dbUrlInput) dbUrlInput.value = localStorage.getItem('supabase_url') || '';
-    if (dbKeyInput) dbKeyInput.value = localStorage.getItem('supabase_key') || '';
+    const isDbDisabled = localStorage.getItem('supabase_disabled') === 'true';
+    if (dbUrlInput) dbUrlInput.value = localStorage.getItem('supabase_url') || (isDbDisabled ? '' : 'https://yiuyhfwlfzqxlsswavtu.supabase.co');
+    if (dbKeyInput) dbKeyInput.value = localStorage.getItem('supabase_key') || (isDbDisabled ? '' : 'sb_publishable_JqDtlH42YtqajUrXDhjN3A_pzjp5yhy');
     if (dbStatusEl) dbStatusEl.style.display = 'none';
     if (dbModal) dbModal.classList.add('active');
   };
@@ -6903,6 +6905,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (!url || !key) {
         // Clear Supabase settings (disconnect)
+        localStorage.setItem('supabase_disabled', 'true');
         localStorage.removeItem('supabase_url');
         localStorage.removeItem('supabase_key');
         supabaseClient = null;
@@ -6925,6 +6928,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (error) throw error;
 
         // Connection successful! Save credentials
+        localStorage.setItem('supabase_disabled', 'false');
         localStorage.setItem('supabase_url', url);
         localStorage.setItem('supabase_key', key);
         supabaseClient = client;
