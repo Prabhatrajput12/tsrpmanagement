@@ -1199,6 +1199,7 @@ create table if not exists public.user_permissions (
   email text not null unique,
   role text default 'user',
   status text default 'pending',
+  password text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

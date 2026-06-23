@@ -548,8 +548,29 @@ async function handleLoginSubmit(e) {
   }
   
   // Direct Bypass for user: jeetu@tsrp.com / 098890
-  const bypassPass = localStorage.getItem('ws_bypass_password') || '098890';
-  const isBypassUser = (emailVal.toLowerCase() === 'jeetu@tsrp.com' || usernameVal.toLowerCase() === 'jeetu@tsrp.com') && passwordVal === bypassPass;
+  let bypassPass = '098890';
+  const isTargetBypass = (emailVal.toLowerCase() === 'jeetu@tsrp.com' || usernameVal.toLowerCase() === 'jeetu@tsrp.com');
+  if (isTargetBypass) {
+    if (supabaseClient) {
+      try {
+        const { data, error } = await supabaseClient
+          .from('user_permissions')
+          .select('password')
+          .eq('email', 'jeetu@tsrp.com')
+          .maybeSingle();
+        if (!error && data && data.password) {
+          bypassPass = data.password;
+        } else {
+          bypassPass = localStorage.getItem('ws_bypass_password') || '098890';
+        }
+      } catch (e) {
+        bypassPass = localStorage.getItem('ws_bypass_password') || '098890';
+      }
+    } else {
+      bypassPass = localStorage.getItem('ws_bypass_password') || '098890';
+    }
+  }
+  const isBypassUser = isTargetBypass && passwordVal === bypassPass;
   if (isBypassUser) {
     failedLoginAttempts = 0;
     lockoutExpiration = 0;
@@ -1122,8 +1143,23 @@ async function handleSecuritySettingsSubmit(e) {
   
   if (supabaseClient) {
     if (isBypassUserObj) {
-      // Validate current bypass password
-      const bypassPass = localStorage.getItem('ws_bypass_password') || '098890';
+      // Validate current bypass password from cloud if available, otherwise local storage
+      let bypassPass = '098890';
+      try {
+        const { data } = await supabaseClient
+          .from('user_permissions')
+          .select('password')
+          .eq('email', 'jeetu@tsrp.com')
+          .maybeSingle();
+        if (data && data.password) {
+          bypassPass = data.password;
+        } else {
+          bypassPass = localStorage.getItem('ws_bypass_password') || '098890';
+        }
+      } catch (e) {
+        bypassPass = localStorage.getItem('ws_bypass_password') || '098890';
+      }
+
       if (currentPass !== bypassPass) {
         if (modal) shakeCard(modal.querySelector('.modal-card'));
         if (errorEl) {
@@ -1133,7 +1169,7 @@ async function handleSecuritySettingsSubmit(e) {
         return;
       }
       
-      // Update bypass password locally
+      // Update bypass password locally and in cloud
       if (newPass) {
         if (newPass !== confirmPass) {
           if (errorEl) {
@@ -1150,6 +1186,32 @@ async function handleSecuritySettingsSubmit(e) {
           return;
         }
         localStorage.setItem('ws_bypass_password', newPass);
+
+        try {
+          const { data: existing } = await supabaseClient
+            .from('user_permissions')
+            .select('*')
+            .eq('email', 'jeetu@tsrp.com')
+            .maybeSingle();
+            
+          if (existing) {
+            await supabaseClient
+              .from('user_permissions')
+              .update({ password: newPass })
+              .eq('email', 'jeetu@tsrp.com');
+          } else {
+            await supabaseClient
+              .from('user_permissions')
+              .insert({
+                email: 'jeetu@tsrp.com',
+                role: 'admin',
+                status: 'approved',
+                password: newPass
+              });
+          }
+        } catch (err) {
+          console.error("Failed to sync bypass password to cloud:", err);
+        }
       }
       
       // Update security question/answer for this bypass user in localStorage
